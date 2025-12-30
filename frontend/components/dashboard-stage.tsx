@@ -1,0 +1,1926 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  User,
+  Moon,
+  Sun,
+  Upload,
+  Scan,
+  Brain,
+  X,
+  CalendarIcon,
+  Trophy,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Edit,
+  Shield,
+  Bell,
+  LogOut,
+  Target,
+  Award,
+  BarChart3,
+  CheckCircle2,
+  Zap,
+  XCircle,
+  Lock,
+  Pill,
+} from "lucide-react"
+import type { UserData } from "@/app/page"
+
+type DailyChallenge = {
+  id: string
+  title: string
+  description: string
+  progress: number
+  goal: number
+  xpReward: number
+  completed: boolean
+}
+
+type Achievement = {
+  id: string
+  title: string
+  description: string
+  icon: string
+  unlocked: boolean
+  unlockedDate?: string
+}
+
+type WeeklyReport = {
+  weekStart: string
+  weekEnd: string
+  scansCompleted: number
+  goodChoices: number
+  badChoices: number
+  totalXP: number
+  avgVitality: number
+  healthScore: number
+}
+
+interface DashboardStageProps {
+  userData: UserData
+  setUserData: (data: UserData) => void
+  onLogout: () => void
+}
+
+interface MealEntry {
+  date: string
+  food: string
+  calories: number
+  protein: number
+  carbs: number
+  fats: number
+  xpGained: number
+  choice?: "red" | "blue"
+  isHealthy?: boolean // Added for simplified meal logging
+}
+
+export function DashboardStage({ userData, setUserData, onLogout }: DashboardStageProps) {
+  const [activeTab, setActiveTab] = useState<"scanner" | "intel">("scanner")
+  const [showProfile, setShowProfile] = useState(false)
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [showJourney, setShowJourney] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showChallenges, setShowChallenges] = useState(false)
+  const [showAchievements, setShowAchievements] = useState(false)
+  const [showWeeklyReport, setShowWeeklyReport] = useState(false)
+  const [darkMode, setDarkMode] = useState(false)
+  const [vitality, setVitality] = useState(100)
+  const [foodInput, setFoodInput] = useState("")
+  const [scanResult, setScanResult] = useState("")
+  const [showPillChoice, setShowPillChoice] = useState(false)
+  const [pendingScan, setPendingScan] = useState<any>(null)
+  const [screenFlash, setScreenFlash] = useState<"red" | "green" | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [hoveredNav, setHoveredNav] = useState<string | null>(null)
+  const [currentDateTime, setCurrentDateTime] = useState(new Date())
+  const [calendarDate, setCalendarDate] = useState(new Date())
+  const [mealHistory, setMealHistory] = useState<MealEntry[]>([
+    {
+      date: "2025-01-15",
+      food: "GRILLED_CHICKEN_SALAD",
+      calories: 450,
+      protein: 35,
+      carbs: 20,
+      fats: 15,
+      xpGained: 20,
+      choice: "blue",
+    },
+    {
+      date: "2025-01-15",
+      food: "PROTEIN_SHAKE",
+      calories: 200,
+      protein: 25,
+      carbs: 10,
+      fats: 5,
+      xpGained: 15,
+      choice: "blue",
+    },
+    {
+      date: "2025-01-14",
+      food: "OATMEAL_BOWL",
+      calories: 350,
+      protein: 12,
+      carbs: 55,
+      fats: 8,
+      xpGained: 18,
+      choice: "blue",
+    },
+  ])
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+
+  const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>([
+    {
+      id: "scan-3-meals",
+      title: "SCAN_3_MEALS",
+      description: "Scan and analyze 3 different meals today",
+      progress: 0,
+      goal: 3,
+      xpReward: 150,
+      completed: false,
+    },
+    {
+      id: "blue-pill-streak",
+      title: "BLUE_PILL_STREAK",
+      description: "Make 2 healthy choices in a row",
+      progress: 0,
+      goal: 2,
+      xpReward: 200,
+      completed: false,
+    },
+    {
+      id: "morning-scan",
+      title: "MORNING_WARRIOR",
+      description: "Scan your breakfast before 10 AM",
+      progress: 0,
+      goal: 1,
+      xpReward: 100,
+      completed: false,
+    },
+  ])
+
+  const [achievements, setAchievements] = useState<Achievement[]>([
+    {
+      id: "first-scan",
+      title: "FIRST_SCAN",
+      description: "Complete your first food scan",
+      icon: "🔬",
+      unlocked: false,
+    },
+    {
+      id: "health-guardian",
+      title: "HEALTH_GUARDIAN",
+      description: "Make 10 blue pill choices",
+      icon: "💊",
+      unlocked: false,
+    },
+    {
+      id: "week-warrior",
+      title: "WEEK_WARRIOR",
+      description: "Maintain 80%+ vitality for 7 days",
+      icon: "⚡",
+      unlocked: false,
+    },
+    {
+      id: "scanner-master",
+      title: "SCANNER_MASTER",
+      description: "Complete 50 food scans",
+      icon: "🎯",
+      unlocked: false,
+    },
+    {
+      id: "level-up",
+      title: "LEVEL_5_ACHIEVED",
+      description: "Reach level 5",
+      icon: "🏆",
+      unlocked: false,
+    },
+  ])
+
+  const [weeklyReport, setWeeklyReport] = useState<WeeklyReport>({
+    weekStart: "2025-01-20",
+    weekEnd: "2025-01-26",
+    scansCompleted: 18,
+    goodChoices: 14,
+    badChoices: 4,
+    totalXP: 2100,
+    avgVitality: 87,
+    healthScore: 78,
+  })
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const calculateRank = (level: number): string => {
+    if (level >= 50) return "MASTER"
+    if (level >= 30) return "EXPERT"
+    if (level >= 15) return "ADVANCED"
+    if (level >= 5) return "INTERMEDIATE"
+    return "NOVICE"
+  }
+
+  const toggleTheme = () => {
+    setDarkMode(!darkMode)
+    document.documentElement.classList.toggle("dark")
+  }
+
+  const handleScan = async () => {
+    if (!foodInput) return
+
+    console.log("[v0] Starting food scan for:", foodInput)
+
+    /*
+    ========================================
+    🔴 BACKEND INTEGRATION POINT #1: FOOD SCAN API
+    ========================================
+
+    WHAT TO DO:
+    Replace this function with your AI model API call
+
+    SEND TO BACKEND:
+    {
+      foodInput: string,              // Food name or description from user
+      imageFile: File | null,         // Optional: Food package image
+      userData: {
+        age: string,
+        weight: string,
+        height: string,
+        medicalHistory: string,       // Health conditions (diabetes, etc.)
+        dailyActivity: string,
+        selectedClass: string          // User's health goal class
+      }
+    }
+
+    EXPECTED RESPONSE FROM YOUR AI MODEL:
+    {
+      foodName: string,                // Cleaned food name
+      calories: number,
+      protein: number,
+      carbs: number,
+      fats: number,
+      sugar: number,                   // ADD THIS - important for health
+      sodium: number,                  // ADD THIS - important for health
+      ingredients: string[],           // LIST OF INGREDIENTS
+      allergens: string[],             // ALLERGENS DETECTED
+      isHealthy: boolean,              // Based on user's profile
+      healthScore: number,             // 0-100 score
+      redPillWarnings: string[],       // Array of warnings/bad effects
+      bluePillAlternatives: string[],  // Array of healthier alternatives
+      personalizedAdvice: string       // Custom advice based on user's health class
+    }
+
+    EXAMPLE API CALL:
+    */
+
+    // Uncomment and use this for your backend
+    /*
+    try {
+      const response = await fetch('/api/analyze-food', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          foodInput,
+          userData: {
+            age: userData.age,
+            weight: userData.weight,
+            height: userData.height,
+            medicalHistory: userData.medicalHistory,
+            dailyActivity: userData.dailyActivity,
+            selectedClass: userData.selectedClass
+          }
+        })
+      })
+
+      const aiResponse = await response.json()
+
+      const scanData = {
+        food: aiResponse.foodName,
+        calories: aiResponse.calories,
+        protein: aiResponse.protein,
+        carbs: aiResponse.carbs,
+        fats: aiResponse.fats,
+        sugar: aiResponse.sugar,
+        sodium: aiResponse.sodium,
+        ingredients: aiResponse.ingredients,
+        allergens: aiResponse.allergens,
+        isHealthy: aiResponse.isHealthy,
+        healthScore: aiResponse.healthScore,
+        redPillWarnings: aiResponse.redPillWarnings,
+        bluePillAlternatives: aiResponse.bluePillAlternatives,
+        personalizedAdvice: aiResponse.personalizedAdvice
+      }
+
+      console.log("[v0] AI Response received:", scanData)
+      setPendingScan(scanData)
+      setScanResult(JSON.stringify(scanData, null, 2))
+      setShowPillChoice(true)
+      setActiveTab("intel")
+      */
+
+    // MOCK DATA (Remove this when you connect backend)
+    const mockScanData = {
+      food: foodInput,
+      calories: Math.floor(Math.random() * 500) + 100,
+      protein: Math.floor(Math.random() * 30) + 5,
+      carbs: Math.floor(Math.random() * 50) + 10,
+      fats: Math.floor(Math.random() * 25) + 5,
+      sugar: Math.floor(Math.random() * 30) + 2,
+      sodium: Math.floor(Math.random() * 800) + 100,
+      isHealthy: Math.random() > 0.5,
+      healthRisk: "moderate",
+      redPillConsequences: "High sugar content may cause energy crash. -15 vitality",
+      bluePillAlternative: "Switch to water or green tea. +10 vitality, +50 XP",
+      detailedAnalysis: `NUTRITIONAL_BREAKDOWN:\n- Calories: ${Math.floor(Math.random() * 500) + 100}\n- Warning: High in processed ingredients`,
+    }
+
+    console.log("[v0] Mock scan data created:", mockScanData)
+    console.log("[v0] Setting pendingScan and showPillChoice to true")
+
+    setScanResult(mockScanData.detailedAnalysis)
+    setPendingScan(mockScanData)
+    setShowPillChoice(true)
+    setActiveTab("intel")
+
+    console.log("[v0] States updated, pill choice should appear")
+
+    if (!achievements[0].unlocked) {
+      const updatedAchievements = [...achievements]
+      updatedAchievements[0] = {
+        ...updatedAchievements[0],
+        unlocked: true,
+        unlockedDate: new Date().toISOString(),
+      }
+      setAchievements(updatedAchievements)
+    }
+
+    const updatedChallenges = [...dailyChallenges]
+    if (!updatedChallenges[0].completed) {
+      updatedChallenges[0].progress = Math.min(updatedChallenges[0].progress + 1, updatedChallenges[0].goal)
+      if (updatedChallenges[0].progress >= updatedChallenges[0].goal) {
+        updatedChallenges[0].completed = true
+        // Award XP
+        const newXP = userData.experience + updatedChallenges[0].xpReward
+        if (newXP >= 1000) {
+          // Assuming 1000 XP for level up for simplicity
+          setUserData({ ...userData, experience: newXP - 1000, level: userData.level + 1 })
+        } else {
+          setUserData({ ...userData, experience: newXP })
+        }
+      }
+      setDailyChallenges(updatedChallenges)
+    }
+  }
+
+  const handlePillChoice = (choice: "red" | "blue") => {
+    // ========================================
+    // BACKEND INTEGRATION POINT #2: RECORD USER CHOICE
+    // ========================================
+    // Send the user's choice to your backend
+    // await fetch('/api/record-choice', {
+    //   method: 'POST',
+    //   body: JSON.stringify({
+    //     userId: userData.username,
+    //     foodScanned: pendingScan.food,
+    //     choice: choice,
+    //     timestamp: new Date().toISOString()
+    //   })
+    // })
+
+    if (choice === "red") {
+      setScreenFlash("red")
+      const newVitality = Math.max(0, vitality - 15) // Example penalty
+      setVitality(newVitality)
+
+      setWeeklyReport({ ...weeklyReport, badChoices: weeklyReport.badChoices + 1 })
+    } else {
+      setScreenFlash("green")
+      const newVitality = Math.min(100, vitality + 10) // Example bonus
+      setVitality(newVitality)
+
+      // Calculate XP and level up
+      const xpGain = 50 // Example XP for a good choice
+      const newXP = userData.experience + xpGain
+
+      if (newXP >= 1000) {
+        // Assuming 1000 XP for level up
+        const newLevel = userData.level + 1
+        let newRank = userData.rank
+        // Simplified rank calculation for example
+        if (newLevel >= 20) newRank = "MASTER"
+        else if (newLevel >= 15) newRank = "EXPERT"
+        else if (newLevel >= 10) newRank = "ADVANCED"
+        else if (newLevel >= 5) newRank = "INTERMEDIATE"
+
+        setUserData({
+          ...userData,
+          experience: newXP - 1000,
+          level: newLevel,
+          rank: newRank,
+        })
+      } else {
+        setUserData({ ...userData, experience: newXP })
+      }
+
+      setWeeklyReport({
+        ...weeklyReport,
+        goodChoices: weeklyReport.goodChoices + 1,
+        totalXP: weeklyReport.totalXP + xpGain,
+      })
+
+      const updatedChallenges = [...dailyChallenges]
+      if (!updatedChallenges[1].completed) {
+        updatedChallenges[1].progress = Math.min(updatedChallenges[1].progress + 1, updatedChallenges[1].goal)
+        if (updatedChallenges[1].progress >= updatedChallenges[1].goal) {
+          updatedChallenges[1].completed = true
+          const bonusXP = updatedChallenges[1].xpReward
+          const totalXP = userData.experience + bonusXP // Use current XP for calculation
+          if (totalXP >= 1000) {
+            setUserData({ ...userData, experience: totalXP - 1000, level: userData.level + 1 })
+          } else {
+            setUserData({ ...userData, experience: totalXP })
+          }
+        }
+        setDailyChallenges(updatedChallenges)
+      }
+
+      if (weeklyReport.goodChoices >= 10 && !achievements[1].unlocked) {
+        const updatedAchievements = [...achievements]
+        updatedAchievements[1] = {
+          ...updatedAchievements[1],
+          unlocked: true,
+          unlockedDate: new Date().toISOString(),
+        }
+        setAchievements(updatedAchievements)
+      }
+    }
+
+    setTimeout(() => setScreenFlash(null), 500)
+    setShowPillChoice(false)
+    setPendingScan(null)
+
+    const newMeal: MealEntry = {
+      date: new Date().toISOString().split("T")[0],
+      food: pendingScan?.food || foodInput, // Use food from pendingScan if available, otherwise from input
+      calories: pendingScan?.calories || 0,
+      protein: pendingScan?.protein || 0,
+      carbs: pendingScan?.carbs || 0,
+      fats: pendingScan?.fats || 0,
+      xpGained: choice === "blue" ? 50 : 0, // Simple XP gain based on choice
+      choice,
+      isHealthy: choice === "blue", // Store health status based on choice
+    }
+    setMealHistory([newMeal, ...mealHistory])
+    setFoodInput("") // Clear input after choice
+  }
+
+  const generateCalendarDays = () => {
+    const year = calendarDate.getFullYear()
+    const month = calendarDate.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const firstDayOfWeek = firstDay.getDay()
+    const days = []
+
+    // Add empty cells for days before the month starts
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      days.push({ day: null, date: null, hasMeals: false })
+    }
+
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      const date = new Date(year, month, i)
+      const dateString = date.toISOString().split("T")[0]
+      const hasMeals = mealHistory.some((meal) => meal.date === dateString)
+      days.push({ day: i, date: dateString, hasMeals })
+    }
+
+    return days
+  }
+
+  const goToPreviousMonth = () => {
+    setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1))
+  }
+
+  const goToNextMonth = () => {
+    setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1))
+  }
+
+  const goToToday = () => {
+    setCalendarDate(new Date())
+  }
+
+  const getMealsForDate = (date: string) => {
+    return mealHistory.filter((meal) => meal.date === date)
+  }
+
+  const getClassDisplay = (classId: string): string => {
+    const classMap: Record<string, string> = {
+      "glucose-guardian": "Glucose Guardian",
+      "metabolic-warrior": "Metabolic Warrior",
+      "hypertrophy-titan": "Hypertrophy Titan",
+      "pressure-regulator": "Pressure Regulator",
+    }
+    return classMap[classId] || classId
+  }
+
+  const navItems = [
+    { icon: CalendarIcon, label: "CALENDAR", color: "accent", action: () => setShowCalendar(true) },
+    { icon: Settings, label: "SETTINGS", color: "[#f59e0b]", action: () => setShowSettings(true) },
+  ]
+
+  const formatDate = () => {
+    return currentDateTime.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
+  }
+
+  const formatTime = () => {
+    return currentDateTime.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+  }
+
+  return (
+    <div className={darkMode ? "dark" : ""}>
+      <AnimatePresence>
+        {screenFlash && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.4 }}
+            exit={{ opacity: 0 }}
+            className={`fixed inset-0 z-50 pointer-events-none ${
+              screenFlash === "red" ? "bg-red-600" : "bg-emerald-400"
+            }`}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Fixed Navigation Bar */}
+      <motion.div
+        initial={{ x: -100 }}
+        animate={{ x: 0 }}
+        className="fixed left-0 top-0 h-screen w-20 glass-panel border-r-2 border-accent/30 z-[500] flex flex-col items-center py-6 gap-4"
+      >
+        {/* Profile Button */}
+        <motion.button
+          whileHover={{ scale: 1.1, x: 5 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            setShowProfile(!showProfile)
+            setShowCalendar(false)
+            setShowJourney(false)
+            setShowSettings(false)
+            setShowChallenges(false)
+            setShowAchievements(false)
+            setShowWeeklyReport(false)
+          }}
+          onMouseEnter={() => setHoveredNav("profile")}
+          onMouseLeave={() => setHoveredNav(null)}
+          className="relative w-12 h-12 rounded-xl bg-primary/20 border-2 border-primary hover:bg-primary/30 flex items-center justify-center transition-all group"
+        >
+          <User className="w-6 h-6 text-primary" />
+          <AnimatePresence>
+            {hoveredNav === "profile" && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="absolute left-full ml-4 px-3 py-2 bg-background border-2 border-primary rounded-lg whitespace-nowrap text-sm font-bold text-primary shadow-lg z-[600]"
+              >
+                PROFILE
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+
+        {/* Calendar Button */}
+        <motion.button
+          whileHover={{ scale: 1.1, x: 5 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            setShowCalendar(!showCalendar)
+            setShowProfile(false)
+            setShowJourney(false)
+            setShowSettings(false)
+            setShowChallenges(false)
+            setShowAchievements(false)
+            setShowWeeklyReport(false)
+          }}
+          onMouseEnter={() => setHoveredNav("calendar")}
+          onMouseLeave={() => setHoveredNav(null)}
+          className="relative w-12 h-12 rounded-xl bg-accent/20 border-2 border-accent hover:bg-accent/30 flex items-center justify-center transition-all group"
+        >
+          <CalendarIcon className="w-6 h-6 text-accent" />
+          <AnimatePresence>
+            {hoveredNav === "calendar" && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="absolute left-full ml-4 px-3 py-2 bg-background border-2 border-accent rounded-lg whitespace-nowrap text-sm font-bold text-accent shadow-lg z-[600]"
+              >
+                CALENDAR
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.1, x: 5 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            setShowChallenges(!showChallenges)
+            setShowProfile(false)
+            setShowCalendar(false)
+            setShowJourney(false)
+            setShowSettings(false)
+            setShowAchievements(false)
+            setShowWeeklyReport(false)
+          }}
+          onMouseEnter={() => setHoveredNav("challenges")}
+          onMouseLeave={() => setHoveredNav(null)}
+          className="relative w-12 h-12 rounded-xl bg-yellow-500/20 border-2 border-yellow-500 hover:bg-yellow-500/30 flex items-center justify-center transition-all group"
+        >
+          <Target className="w-6 h-6 text-yellow-500" />
+          {dailyChallenges.some((c) => !c.completed) && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full animate-pulse" />
+          )}
+          <AnimatePresence>
+            {hoveredNav === "challenges" && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="absolute left-full ml-4 px-3 py-2 bg-background border-2 border-yellow-500 rounded-lg whitespace-nowrap text-sm font-bold text-yellow-500 shadow-lg z-[600]"
+              >
+                CHALLENGES
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.1, x: 5 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            setShowAchievements(!showAchievements)
+            setShowProfile(false)
+            setShowCalendar(false)
+            setShowJourney(false)
+            setShowSettings(false)
+            setShowChallenges(false)
+            setShowWeeklyReport(false)
+          }}
+          onMouseEnter={() => setHoveredNav("achievements")}
+          onMouseLeave={() => setHoveredNav(null)}
+          className="relative w-12 h-12 rounded-xl bg-amber-500/20 border-2 border-amber-500 hover:bg-amber-500/30 flex items-center justify-center transition-all group"
+        >
+          <Award className="w-6 h-6 text-amber-500" />
+          <AnimatePresence>
+            {hoveredNav === "achievements" && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="absolute left-full ml-4 px-3 py-2 bg-background border-2 border-amber-500 rounded-lg whitespace-nowrap text-sm font-bold text-amber-500 shadow-lg z-[600]"
+              >
+                ACHIEVEMENTS
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+
+        {/* Journey Button */}
+        <motion.button
+          whileHover={{ scale: 1.1, x: 5 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            setShowJourney(!showJourney)
+            setShowProfile(false)
+            setShowCalendar(false)
+            setShowSettings(false)
+            setShowChallenges(false)
+            setShowAchievements(false)
+            setShowWeeklyReport(false)
+          }}
+          onMouseEnter={() => setHoveredNav("journey")}
+          onMouseLeave={() => setHoveredNav(null)}
+          className="relative w-12 h-12 rounded-xl bg-secondary/20 border-2 border-secondary hover:bg-secondary/30 flex items-center justify-center transition-all group"
+        >
+          <Trophy className="w-6 h-6 text-secondary" />
+          <AnimatePresence>
+            {hoveredNav === "journey" && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="absolute left-full ml-4 px-3 py-2 bg-background border-2 border-secondary rounded-lg whitespace-nowrap text-sm font-bold text-secondary shadow-lg z-[600]"
+              >
+                JOURNEY
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.1, x: 5 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            setShowWeeklyReport(!showWeeklyReport)
+            setShowProfile(false)
+            setShowCalendar(false)
+            setShowJourney(false)
+            setShowSettings(false)
+            setShowChallenges(false)
+            setShowAchievements(false)
+          }}
+          onMouseEnter={() => setHoveredNav("report")}
+          onMouseLeave={() => setHoveredNav(null)}
+          className="relative w-12 h-12 rounded-xl bg-emerald-500/20 border-2 border-emerald-500 hover:bg-emerald-500/30 flex items-center justify-center transition-all group"
+        >
+          <BarChart3 className="w-6 h-6 text-emerald-500" />
+          <AnimatePresence>
+            {hoveredNav === "report" && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="absolute left-full ml-4 px-3 py-2 bg-background border-2 border-emerald-500 rounded-lg whitespace-nowrap text-sm font-bold text-emerald-500 shadow-lg z-[600]"
+              >
+                WEEKLY REPORT
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+
+        <div className="flex-1" />
+
+        {/* Theme Toggle */}
+        <motion.button
+          whileHover={{ scale: 1.1, rotate: 180 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={toggleTheme}
+          onMouseEnter={() => setHoveredNav("theme")}
+          onMouseLeave={() => setHoveredNav(null)}
+          className="relative w-12 h-12 rounded-xl bg-muted/20 border-2 border-muted hover:bg-muted/30 flex items-center justify-center transition-all"
+        >
+          {darkMode ? <Sun className="w-6 h-6 text-yellow-400" /> : <Moon className="w-6 h-6 text-blue-400" />}
+          <AnimatePresence>
+            {hoveredNav === "theme" && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="absolute left-full ml-4 px-3 py-2 bg-background border-2 border-muted rounded-lg whitespace-nowrap text-sm font-bold text-muted-foreground shadow-lg z-[600]"
+              >
+                THEME
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+
+        {/* Settings Button */}
+        <motion.button
+          whileHover={{ scale: 1.1, rotate: 90 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            setShowSettings(!showSettings)
+            setShowProfile(false)
+            setShowCalendar(false)
+            setShowJourney(false)
+            setShowChallenges(false)
+            setShowAchievements(false)
+            setShowWeeklyReport(false)
+          }}
+          onMouseEnter={() => setHoveredNav("settings")}
+          onMouseLeave={() => setHoveredNav(null)}
+          className="relative w-12 h-12 rounded-xl bg-muted/20 border-2 border-muted hover:bg-muted/30 flex items-center justify-center transition-all"
+        >
+          <Settings className="w-6 h-6 text-muted-foreground" />
+          <AnimatePresence>
+            {hoveredNav === "settings" && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="absolute left-full ml-4 px-3 py-2 bg-background border-2 border-muted rounded-lg whitespace-nowrap text-sm font-bold text-muted-foreground shadow-lg z-[600]"
+              >
+                SETTINGS
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+      </motion.div>
+
+      {/* Main Content Area with proper offset */}
+      <div className="ml-20 min-h-screen p-4 md:p-8 relative z-10">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-6 text-center">
+          <div className="text-2xl md:text-3xl font-bold text-primary pixel-glow">
+            {currentDateTime.toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </div>
+          <motion.div
+            className="text-lg md:text-xl text-accent font-mono mt-1"
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
+          >
+            {currentDateTime.toLocaleTimeString("en-US", { hour12: false })}
+          </motion.div>
+        </motion.div>
+
+        {/* Progress Bars */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          {/* Vitality Bar with glow effect */}
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            className="glass-panel border-primary/30 rounded-lg p-6 relative overflow-hidden backdrop-blur-sm bg-background/50"
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-bold text-primary pixel-glow">VITALITY</span>
+                <span className="text-sm font-mono text-primary">{vitality}/100</span>
+              </div>
+              <div className="h-4 bg-input rounded-full overflow-hidden relative">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-pink-500 via-rose-500 to-red-500 relative"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${vitality}%` }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                >
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                    animate={{ x: ["-100%", "200%"] }}
+                    transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+                  />
+                </motion.div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Experience Bar */}
+          <motion.div
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 }}
+            className="glass-panel border-secondary/30 rounded-lg p-6 relative overflow-hidden backdrop-blur-sm bg-background/50"
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-bold text-secondary pixel-glow">EXPERIENCE</span>
+                <span className="text-sm font-mono text-secondary">
+                  LVL {userData.level} | {userData.experience}/1000 XP
+                </span>
+              </div>
+              <div className="h-4 bg-input rounded-full overflow-hidden relative">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 relative"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${userData.experience}%` }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                >
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                    animate={{ x: ["-100%", "200%"] }}
+                    transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+                  />
+                </motion.div>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">RANK: [{userData.rank}]</div>
+            </div>
+          </motion.div>
+        </div>
+
+        <AnimatePresence>
+          {showProfile && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+                onClick={() => setShowProfile(false)}
+              />
+              <motion.div
+                initial={{ x: -400, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -400, opacity: 0 }}
+                transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                className="fixed left-0 top-0 h-screen w-96 glass-panel border-r-2 border-primary z-[110] p-8 overflow-y-auto shadow-2xl"
+              >
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-3xl font-bold text-primary pixel-glow">PROFILE</h2>
+                  <Button
+                    onClick={() => setShowProfile(false)}
+                    variant="ghost"
+                    size="icon"
+                    className="text-primary hover:bg-primary/20 border-2 border-primary/50 hover:border-primary rounded-xl"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                <div className="flex flex-col items-center mb-8">
+                  <div className="w-36 h-36 rounded-full bg-gradient-to-br from-primary via-accent to-secondary border-4 border-primary/50 flex items-center justify-center mb-4 shadow-xl relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/10 to-transparent" />
+                    <User className="w-20 h-20 text-primary-foreground relative z-10" />
+                  </div>
+                  <div className="flex items-center gap-2 text-accent mb-2 glass-panel border-accent px-4 py-2 rounded-full">
+                    <Trophy className="w-5 h-5" />
+                    <span className="font-bold">
+                      LVL {userData.level} - {userData.rank}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground uppercase tracking-widest font-bold">
+                    {getClassDisplay(userData.selectedClass)}
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-bold text-secondary pixel-glow">BIO-DATA</h3>
+                    <Button
+                      onClick={() => setIsEditing(!isEditing)}
+                      variant="outline"
+                      size="sm"
+                      className="border-2 border-accent text-accent hover:bg-accent hover:text-accent-foreground neon-border transition-all"
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      {isEditing ? "SAVE" : "EDIT"}
+                    </Button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="glass-panel border-primary/30 rounded-lg p-4">
+                      <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">AGE</Label>
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          value={userData.age}
+                          onChange={(e) => setUserData({ ...userData, age: e.target.value })}
+                          className="bg-input border-2 border-primary text-foreground neon-border h-10 mt-2 font-bold"
+                        />
+                      ) : (
+                        <p className="text-primary font-bold text-lg mt-1">{userData.age} years</p>
+                      )}
+                    </div>
+
+                    <div className="glass-panel border-primary/30 rounded-lg p-4">
+                      <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">WEIGHT</Label>
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          value={userData.weight}
+                          onChange={(e) => setUserData({ ...userData, weight: e.target.value })}
+                          className="bg-input border-2 border-primary text-foreground neon-border h-10 mt-2 font-bold"
+                        />
+                      ) : (
+                        <p className="text-primary font-bold text-lg mt-1">{userData.weight} kg</p>
+                      )}
+                    </div>
+
+                    <div className="glass-panel border-primary/30 rounded-lg p-4">
+                      <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">HEIGHT</Label>
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          value={userData.height}
+                          onChange={(e) => setUserData({ ...userData, height: e.target.value })}
+                          className="bg-input border-2 border-primary text-foreground neon-border h-10 mt-2 font-bold"
+                        />
+                      ) : (
+                        <p className="text-primary font-bold text-lg mt-1">{userData.height} cm</p>
+                      )}
+                    </div>
+
+                    <div className="glass-panel border-primary/30 rounded-lg p-4">
+                      <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+                        ACTIVITY LEVEL
+                      </Label>
+                      {isEditing ? (
+                        <select
+                          value={userData.dailyActivity}
+                          onChange={(e) => setUserData({ ...userData, dailyActivity: e.target.value })}
+                          className="w-full bg-input border-2 border-primary text-foreground neon-border h-10 rounded-lg px-3 font-bold text-sm mt-2"
+                        >
+                          <option value="sedentary">SEDENTARY</option>
+                          <option value="light">LIGHT</option>
+                          <option value="moderate">MODERATE</option>
+                          <option value="active">ACTIVE</option>
+                          <option value="extreme">EXTREME</option>
+                        </select>
+                      ) : (
+                        <p className="text-primary font-bold text-lg mt-1 uppercase">{userData.dailyActivity}</p>
+                      )}
+                    </div>
+
+                    <div className="glass-panel border-primary/30 rounded-lg p-4">
+                      <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+                        MEDICAL HISTORY
+                      </Label>
+                      {isEditing ? (
+                        <Textarea
+                          value={userData.medicalHistory}
+                          onChange={(e) => setUserData({ ...userData, medicalHistory: e.target.value })}
+                          className="bg-input border-2 border-primary text-foreground neon-border min-h-24 resize-none mt-2 text-sm font-mono"
+                        />
+                      ) : (
+                        <p className="text-primary text-sm mt-2 font-mono">
+                          {userData.medicalHistory || "None recorded"}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        {/* Calendar Modal with navigation */}
+        <AnimatePresence>
+          {showCalendar && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+                onClick={() => {
+                  setShowCalendar(false)
+                  setSelectedDate(null)
+                }}
+              />
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-4xl max-h-[90vh] glass-panel border-2 border-accent z-50 p-8 overflow-y-auto shadow-2xl rounded-2xl"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-3xl font-bold text-accent pixel-glow">MEAL_CALENDAR</h2>
+                  <Button
+                    onClick={() => {
+                      setShowCalendar(false)
+                      setSelectedDate(null)
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="text-accent hover:bg-accent/20 border-2 border-accent/50 hover:border-accent rounded-xl"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                {!selectedDate ? (
+                  <>
+                    <div className="flex items-center justify-between mb-6">
+                      <Button
+                        onClick={goToPreviousMonth}
+                        variant="outline"
+                        size="icon"
+                        className="border-2 border-accent text-accent hover:bg-accent hover:text-accent-foreground bg-transparent"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </Button>
+                      <div className="text-center">
+                        <h3 className="text-2xl font-bold text-primary">
+                          {calendarDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                        </h3>
+                        <Button
+                          onClick={goToToday}
+                          variant="ghost"
+                          className="text-xs text-muted-foreground hover:text-accent mt-1"
+                        >
+                          TODAY
+                        </Button>
+                      </div>
+                      <Button
+                        onClick={goToNextMonth}
+                        variant="outline"
+                        size="icon"
+                        className="border-2 border-accent text-accent hover:bg-accent hover:text-accent-foreground bg-transparent"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-2 mb-2">
+                      {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((day) => (
+                        <div key={day} className="text-center text-xs font-bold text-muted-foreground py-2">
+                          {day}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-2">
+                      {generateCalendarDays().map((day, index) => (
+                        <button
+                          key={index}
+                          onClick={() => day.date && setSelectedDate(day.date)}
+                          disabled={!day.date}
+                          className={`aspect-square flex flex-col items-center justify-center rounded-lg border-2 transition-all hover:scale-105 disabled:opacity-30 disabled:cursor-not-allowed ${
+                            day.hasMeals
+                              ? "border-accent bg-accent/20 text-accent font-bold"
+                              : "border-muted bg-muted/10 text-muted-foreground"
+                          }`}
+                        >
+                          {day.day && (
+                            <>
+                              <span className="text-xl">{day.day}</span>
+                              {day.hasMeals && <div className="w-2 h-2 rounded-full bg-accent mt-1" />}
+                            </>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <Button
+                      onClick={() => setSelectedDate(null)}
+                      variant="outline"
+                      className="mb-4 border-2 border-accent text-accent hover:bg-accent hover:text-accent-foreground"
+                    >
+                      ← BACK_TO_CALENDAR
+                    </Button>
+                    <h3 className="text-xl font-bold text-primary mb-4">
+                      MEALS_FOR:{" "}
+                      {new Date(selectedDate).toLocaleDateString("en-US", {
+                        weekday: "long",
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </h3>
+                    {getMealsForDate(selectedDate).length === 0 ? (
+                      <p className="text-muted-foreground text-center py-8">NO_MEALS_LOGGED</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {getMealsForDate(selectedDate).map((meal, index) => (
+                          <div key={index} className="glass-panel border-primary/30 rounded-lg p-6">
+                            <div className="flex items-start justify-between mb-3">
+                              <h4 className="text-lg font-bold text-primary">{meal.food}</h4>
+                              {meal.choice && (
+                                <span
+                                  className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                    meal.choice === "blue"
+                                      ? "bg-blue-500/20 text-blue-400 border border-blue-500"
+                                      : "bg-red-500/20 text-red-400 border border-red-500"
+                                  }`}
+                                >
+                                  {meal.choice === "blue" ? "BLUE_PILL" : "RED_PILL"}
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <p className="text-muted-foreground">CALORIES</p>
+                                <p className="text-accent font-bold">{meal.calories} kcal</p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">PROTEIN</p>
+                                <p className="text-accent font-bold">{meal.protein}g</p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">CARBS</p>
+                                <p className="text-accent font-bold">{meal.carbs}g</p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">FATS</p>
+                                <p className="text-accent font-bold">{meal.fats}g</p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">XP_GAINED</p>
+                                <p className={`font-bold ${meal.xpGained > 0 ? "text-secondary" : "text-red-400"}`}>
+                                  {meal.xpGained > 0 ? `+${meal.xpGained}` : meal.xpGained} XP
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showJourney && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+                onClick={() => setShowJourney(false)}
+              />
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-2xl max-h-[90vh] glass-panel border-2 border-secondary z-50 p-8 overflow-y-auto shadow-2xl rounded-2xl"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-3xl font-bold text-secondary pixel-glow">YOUR_JOURNEY</h2>
+                  <Button
+                    onClick={() => setShowJourney(false)}
+                    variant="ghost"
+                    size="icon"
+                    className="text-secondary hover:bg-secondary/20 border-2 border-secondary/50 hover:border-secondary rounded-xl"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="glass-panel border-primary/30 rounded-lg p-6 text-center">
+                    <Trophy className="w-16 h-16 text-accent mx-auto mb-4" />
+                    <h3 className="text-4xl font-bold text-primary mb-2">LEVEL {userData.level}</h3>
+                    <p className="text-2xl text-accent font-bold mb-4">{userData.rank}</p>
+                    <p className="text-muted-foreground">CLASS: {getClassDisplay(userData.selectedClass)}</p>
+                  </div>
+
+                  <div className="glass-panel border-accent/30 rounded-lg p-6">
+                    <h4 className="text-lg font-bold text-accent mb-4">PROGRESS_TO_NEXT_LEVEL</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">EXPERIENCE</span>
+                        <span className="text-secondary font-bold">{userData.experience}/1000 XP</span>
+                      </div>
+                      <div className="h-3 bg-muted/30 rounded-full overflow-hidden border-2 border-secondary/50">
+                        <motion.div
+                          className="h-full bg-gradient-to-r from-secondary to-accent"
+                          animate={{ width: `${userData.experience}%` }}
+                          transition={{ duration: 0.5 }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="glass-panel border-primary/30 rounded-lg p-6">
+                    <h4 className="text-lg font-bold text-primary mb-4">RANK_PROGRESSION</h4>
+                    <div className="space-y-3">
+                      {["NOVICE", "INTERMEDIATE", "ADVANCED", "EXPERT", "MASTER"].map((rank) => (
+                        <div
+                          key={rank}
+                          className={`flex items-center justify-between p-3 rounded-lg ${
+                            userData.rank === rank ? "bg-accent/20 border-2 border-accent" : "bg-muted/10"
+                          }`}
+                        >
+                          <span
+                            className={`font-bold ${userData.rank === rank ? "text-accent" : "text-muted-foreground"}`}
+                          >
+                            {rank}
+                          </span>
+                          {userData.rank === rank && <Shield className="w-5 h-5 text-accent" />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="glass-panel border-secondary/30 rounded-lg p-6">
+                    <h4 className="text-lg font-bold text-secondary mb-4">STATS</h4>
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">TOTAL_MEALS_SCANNED</span>
+                        <span className="text-primary font-bold">{mealHistory.length}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">TOTAL_XP_EARNED</span>
+                        <span className="text-secondary font-bold">
+                          {mealHistory.reduce((sum, meal) => sum + meal.xpGained, 0)} XP
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">VITALITY_STATUS</span>
+                        <span className="text-accent font-bold">OPTIMAL</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showSettings && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+                onClick={() => setShowSettings(false)}
+              />
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-md glass-panel border-2 border-[#f59e0b] z-50 p-8 shadow-2xl rounded-2xl"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-[#f59e0b] pixel-glow">SETTINGS</h2>
+                  <Button
+                    onClick={() => setShowSettings(false)}
+                    variant="ghost"
+                    size="icon"
+                    className="text-[#f59e0b] hover:bg-[#f59e0b]/20 border-2 border-[#f59e0b]/50 hover:border-[#f59e0b] rounded-xl"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
+                  <button
+                    onClick={() => {
+                      toggleTheme()
+                      setShowSettings(false)
+                    }}
+                    className="w-full glass-panel border-accent/30 rounded-lg p-4 hover:border-accent transition-all flex items-center gap-3"
+                  >
+                    {darkMode ? <Sun className="w-5 h-5 text-accent" /> : <Moon className="w-5 h-5 text-accent" />}
+                    <div className="text-left">
+                      <p className="font-bold text-accent">THEME_MODE</p>
+                      <p className="text-xs text-muted-foreground">CURRENT: {darkMode ? "DARK" : "LIGHT"}</p>
+                    </div>
+                  </button>
+
+                  <button className="w-full glass-panel border-primary/30 rounded-lg p-4 hover:border-primary transition-all flex items-center gap-3">
+                    <Bell className="w-5 h-5 text-primary" />
+                    <div className="text-left">
+                      <p className="font-bold text-primary">NOTIFICATIONS</p>
+                      <p className="text-xs text-muted-foreground">MANAGE_ALERTS</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowSettings(false)
+                      onLogout()
+                    }}
+                    className="w-full glass-panel border-red-500/30 rounded-lg p-4 hover:border-red-500 transition-all flex items-center gap-3 group"
+                  >
+                    <LogOut className="w-5 h-5 text-red-500" />
+                    <div className="text-left">
+                      <p className="font-bold text-red-500">LOGOUT</p>
+                      <p className="text-xs text-muted-foreground">DISCONNECT_SESSION</p>
+                    </div>
+                  </button>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
+          <div className="glass-panel border-primary/30 neon-border rounded-2xl p-6 md:p-10 shadow-2xl">
+            <div className="flex items-center gap-3 mb-6">
+              <Brain className="w-8 h-8 text-accent" />
+              <div>
+                <h2 className="text-2xl md:text-3xl font-bold text-primary pixel-glow">AETURNAL_CORE</h2>
+                <p className="text-sm text-muted-foreground">{"// DEEP_MATTER_ANALYSIS_SYSTEM"}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mb-6">
+              <Button
+                onClick={() => setActiveTab("scanner")}
+                className={`flex-1 h-12 font-bold transition-all ${
+                  activeTab === "scanner"
+                    ? "bg-accent text-accent-foreground neon-border border-accent"
+                    : "bg-input text-muted-foreground border-2 border-input hover:border-accent/50"
+                }`}
+              >
+                <Scan className="w-5 h-5 mr-2" />
+                SCANNER
+              </Button>
+              <Button
+                onClick={() => setActiveTab("intel")}
+                className={`flex-1 h-12 font-bold transition-all ${
+                  activeTab === "intel"
+                    ? "bg-secondary text-secondary-foreground neon-border border-secondary"
+                    : "bg-input text-muted-foreground border-2 border-input hover:border-secondary/50"
+                }`}
+              >
+                <Brain className="w-5 h-5 mr-2" />
+                INTEL
+              </Button>
+            </div>
+
+            <div className="min-h-96">
+              {activeTab === "scanner" && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <div className="glass-panel border-accent neon-border rounded-lg p-4 bg-gradient-to-r from-accent/10 to-secondary/10">
+                    <div className="flex items-center gap-3">
+                      <div className="text-4xl pixel-food">🍜</div>
+                      <div>
+                        <h3 className="text-lg font-bold text-accent">FOOD_NEURAL_SCANNER</h3>
+                        <p className="text-xs text-muted-foreground">
+                          {"// SCAN_NUTRITION_LABELS_&_PACKAGE_INGREDIENTS"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="glass-panel border-accent neon-border rounded-lg p-6">
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm text-muted-foreground mb-2 block flex items-center gap-2">
+                          🔍 INPUT_FOOD_DATA:
+                        </Label>
+                        <Input
+                          value={foodInput}
+                          onChange={(e) => setFoodInput(e.target.value)}
+                          placeholder="E.g., Monster Energy Drink, Doritos, Pizza..."
+                          className="bg-input border-accent text-foreground neon-border h-12"
+                        />
+                      </div>
+
+                      <div className="border-2 border-dashed border-accent/50 rounded-lg p-8 text-center cursor-pointer hover:border-accent transition-colors hover:bg-accent/5">
+                        <div className="text-5xl mb-2">📦</div>
+                        <Upload className="w-12 h-12 text-accent mx-auto mb-3" />
+                        <p className="text-sm text-muted-foreground font-bold">UPLOAD_PACKAGE_IMAGE</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {"// SCAN_NUTRITION_LABEL_OR_INGREDIENT_LIST"}
+                        </p>
+                        <p className="text-xs text-accent/70 mt-2">{"Supported: JPG, PNG, PDF"}</p>
+                      </div>
+
+                      <Button
+                        onClick={handleScan}
+                        disabled={!foodInput}
+                        className="w-full bg-accent text-accent-foreground hover:bg-accent/90 neon-border border-accent h-12 font-bold disabled:opacity-50"
+                      >
+                        🧬 ANALYZE_FOOD
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="glass-panel border-accent/30 rounded-lg p-4 text-xs">
+                    <div className="flex items-start gap-2">
+                      <div className="text-xl">💡</div>
+                      <div>
+                        <p className="text-accent font-bold mb-1">
+                          CLASS_TIP: [{getClassDisplay(userData.selectedClass)}]
+                        </p>
+                        <p className="text-muted-foreground">
+                          {userData.selectedClass === "glucose-guardian" &&
+                            "Monitor sugar content in scanned foods. High sugar = vitality loss!"}
+                          {userData.selectedClass === "metabolic-warrior" &&
+                            "Track calories! Maintain deficit for maximum XP gains."}
+                          {userData.selectedClass === "hypertrophy-titan" &&
+                            "Prioritize protein! 20g+ per meal = bonus XP."}
+                          {userData.selectedClass === "pressure-regulator" &&
+                            "Watch sodium levels! <2000mg daily recommended."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-center text-muted-foreground">
+                    🎮 CLASS: [{getClassDisplay(userData.selectedClass)}] | 📅 AGE: [{userData.age}] | ⚖️ MASS: [
+                    {userData.weight}
+                    KG]
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === "intel" && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <div className="glass-panel border-secondary neon-border rounded-lg p-6">
+                    <h3 className="text-lg font-bold text-secondary mb-4">ANALYSIS_OUTPUT</h3>
+
+                    {scanResult ? (
+                      <Textarea
+                        value={scanResult}
+                        readOnly
+                        className="bg-input border-secondary text-foreground neon-border min-h-80 font-mono text-sm resize-none"
+                      />
+                    ) : (
+                      <div className="min-h-80 flex items-center justify-center text-muted-foreground">
+                        <div className="text-center">
+                          <Brain className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                          <p>{">> AWAITING_SCAN_DATA"}</p>
+                          <p className="text-xs mt-2">{"// INITIATE_SCAN_TO_BEGIN"}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {scanResult && (
+                    <Button className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 neon-border border-secondary h-12 font-bold">
+                      SAVE_TO_ARCHIVE
+                    </Button>
+                  )}
+                </motion.div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showChallenges && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-40 p-4"
+            onClick={() => setShowChallenges(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-panel border-yellow-500 neon-border rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Target className="w-8 h-8 text-yellow-500" />
+                  <h2 className="text-2xl font-bold text-yellow-500 pixel-glow">DAILY_CHALLENGES</h2>
+                </div>
+                <Button
+                  onClick={() => setShowChallenges(false)}
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-6 h-6" />
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                {dailyChallenges.map((challenge) => (
+                  <motion.div
+                    key={challenge.id}
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    className={`glass-panel rounded-lg p-4 ${
+                      challenge.completed
+                        ? "border-2 border-emerald-500 bg-emerald-500/10"
+                        : "border-2 border-yellow-500/30"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="font-bold text-foreground">{challenge.title}</h3>
+                        <p className="text-sm text-muted-foreground">{challenge.description}</p>
+                      </div>
+                      {challenge.completed && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          PROGRESS: {challenge.progress}/{challenge.goal}
+                        </span>
+                        <span className="text-yellow-500 font-bold">+{challenge.xpReward} XP</span>
+                      </div>
+                      <div className="h-2 bg-input rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${(challenge.progress / challenge.goal) * 100}%` }}
+                          className="h-full bg-gradient-to-r from-yellow-500 to-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="mt-6 p-4 glass-panel border-2 border-yellow-500/30 rounded-lg">
+                <p className="text-xs text-muted-foreground text-center">
+                  {"// CHALLENGES_RESET_DAILY_AT_00:00"}
+                  <br />
+                  {"// COMPLETE_FOR_BONUS_XP"}
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAchievements && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-40 p-4"
+            onClick={() => setShowAchievements(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-panel border-amber-500 neon-border rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Award className="w-8 h-8 text-amber-500" />
+                  <h2 className="text-2xl font-bold text-amber-500 pixel-glow">ACHIEVEMENTS</h2>
+                </div>
+                <Button
+                  onClick={() => setShowAchievements(false)}
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-6 h-6" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {achievements.map((achievement) => (
+                  <motion.div
+                    key={achievement.id}
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    whileHover={{ scale: 1.05 }}
+                    className={`glass-panel rounded-lg p-4 text-center transition-all ${
+                      achievement.unlocked
+                        ? "border-2 border-amber-500 bg-gradient-to-br from-amber-500/20 to-yellow-500/10"
+                        : "border-2 border-muted/30 opacity-50 grayscale"
+                    }`}
+                  >
+                    <div className="text-5xl mb-2">{achievement.icon}</div>
+                    <h3 className="font-bold text-foreground mb-1">{achievement.title}</h3>
+                    <p className="text-xs text-muted-foreground">{achievement.description}</p>
+                    {achievement.unlocked && achievement.unlockedDate && (
+                      <p className="text-xs text-amber-500 mt-2">
+                        UNLOCKED: {new Date(achievement.unlockedDate).toLocaleDateString()}
+                      </p>
+                    )}
+                    {!achievement.unlocked && <Lock className="w-4 h-4 mx-auto mt-2 text-muted-foreground" />}
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="mt-6 p-4 glass-panel border-2 border-amber-500/30 rounded-lg">
+                <p className="text-xs text-muted-foreground text-center">
+                  {"// UNLOCK_ACHIEVEMENTS_BY_REACHING_MILESTONES"}
+                  <br />
+                  {"// SHOW_OFF_YOUR_PROGRESS"}
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showWeeklyReport && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-40 p-4"
+            onClick={() => setShowWeeklyReport(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-panel border-emerald-500 neon-border rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <BarChart3 className="w-8 h-8 text-emerald-500" />
+                  <h2 className="text-2xl font-bold text-emerald-500 pixel-glow">WEEKLY_HEALTH_REPORT</h2>
+                </div>
+                <Button
+                  onClick={() => setShowWeeklyReport(false)}
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-6 h-6" />
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="text-center p-4 glass-panel border-2 border-emerald-500/30 rounded-lg">
+                  <p className="text-sm text-muted-foreground">REPORTING_PERIOD</p>
+                  <p className="text-lg font-bold text-foreground">
+                    {weeklyReport.weekStart} - {weeklyReport.weekEnd}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="glass-panel border-2 border-primary/30 rounded-lg p-4 text-center">
+                    <Scan className="w-8 h-8 text-primary mx-auto mb-2" />
+                    <p className="text-3xl font-bold text-primary">{weeklyReport.scansCompleted}</p>
+                    <p className="text-xs text-muted-foreground">SCANS_COMPLETED</p>
+                  </div>
+
+                  <div className="glass-panel border-2 border-secondary/30 rounded-lg p-4 text-center">
+                    <Zap className="w-8 h-8 text-secondary mx-auto mb-2" />
+                    <p className="text-3xl font-bold text-secondary">{weeklyReport.totalXP}</p>
+                    <p className="text-xs text-muted-foreground">TOTAL_XP_EARNED</p>
+                  </div>
+
+                  <div className="glass-panel border-2 border-emerald-500/30 rounded-lg p-4 text-center">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                    <p className="text-3xl font-bold text-emerald-500">{weeklyReport.goodChoices}</p>
+                    <p className="text-xs text-muted-foreground">BLUE_PILLS</p>
+                  </div>
+
+                  <div className="glass-panel border-2 border-red-500/30 rounded-lg p-4 text-center">
+                    <XCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+                    <p className="text-3xl font-bold text-red-500">{weeklyReport.badChoices}</p>
+                    <p className="text-xs text-muted-foreground">RED_PILLS</p>
+                  </div>
+                </div>
+
+                <div className="glass-panel border-2 border-accent/30 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-muted-foreground">AVG_VITALITY</span>
+                    <span className="text-lg font-bold text-accent">{weeklyReport.avgVitality}%</span>
+                  </div>
+                  <div className="h-3 bg-input rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${weeklyReport.avgVitality}%` }}
+                      className="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="glass-panel border-2 border-secondary/30 rounded-lg p-6 text-center">
+                  <p className="text-sm text-muted-foreground mb-2">HEALTH_SCORE</p>
+                  <motion.p
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="text-6xl font-bold text-secondary pixel-glow"
+                  >
+                    {weeklyReport.healthScore}
+                  </motion.p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {weeklyReport.healthScore >= 80 && "EXCELLENT! Keep it up!"}
+                    {weeklyReport.healthScore >= 60 && weeklyReport.healthScore < 80 && "GOOD! You're on track."}
+                    {weeklyReport.healthScore < 60 && "NEEDS_IMPROVEMENT. Try more blue pills!"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 glass-panel border-2 border-emerald-500/30 rounded-lg">
+                <p className="text-xs text-muted-foreground text-center">
+                  {"// REPORTS_GENERATED_WEEKLY"}
+                  <br />
+                  {"// TRACK_YOUR_HEALTH_JOURNEY"}
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showPillChoice && pendingScan && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-md z-50"
+              onClick={() => {
+                setShowPillChoice(false)
+                setPendingScan(null)
+              }}
+            />
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0, rotateX: 90 }}
+              animate={{ scale: 1, opacity: 1, rotateX: 0 }}
+              exit={{ scale: 0.5, opacity: 0, rotateX: -90 }}
+              transition={{ type: "spring", damping: 20, stiffness: 200 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-2xl glass-panel border-2 border-accent z-[70] p-8 rounded-2xl shadow-2xl"
+            >
+              <div className="text-center mb-8">
+                <motion.h2
+                  className="text-3xl md:text-4xl font-bold text-accent pixel-glow mb-4"
+                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
+                >
+                  MAKE_YOUR_CHOICE
+                </motion.h2>
+                <p className="text-muted-foreground text-sm md:text-base">
+                  {pendingScan.isHealthy
+                    ? ">> FOOD_SCAN: Nutritional profile OPTIMAL. Select your path forward."
+                    : ">> WARNING: Health markers indicate SUBOPTIMAL consumption. Choose wisely."}
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <motion.button
+                  whileHover={{ scale: 1.05, y: -5 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handlePillChoice("red")}
+                  className="group relative glass-panel border-2 border-red-500 hover:border-red-400 rounded-xl p-6 transition-all"
+                >
+                  <div className="absolute inset-0 bg-red-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative">
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center border-2 border-red-500">
+                        <Pill className="w-8 h-8 text-red-500" />
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-bold text-red-500 mb-2">RED_PILL</h3>
+                    <p className="text-sm text-muted-foreground mb-4">IGNORE_WARNINGS // Proceed with consumption</p>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center gap-2 text-red-400">
+                        <span>•</span>
+                        <span>VITALITY: -5 to -15</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-red-400">
+                        <span>•</span>
+                        <span>EXPERIENCE: 0 XP</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-red-400">
+                        <span>•</span>
+                        <span>RISK: HIGH</span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.05, y: -5 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handlePillChoice("blue")}
+                  className="group relative glass-panel border-2 border-blue-500 hover:border-blue-400 rounded-xl p-6 transition-all"
+                >
+                  <div className="absolute inset-0 bg-blue-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative">
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center border-2 border-blue-500">
+                        <Pill className="w-8 h-8 text-blue-500" />
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-bold text-blue-500 mb-2">BLUE_PILL</h3>
+                    <p className="text-sm text-muted-foreground mb-4">FOLLOW_PROTOCOLS // Optimal health path</p>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center gap-2 text-blue-400">
+                        <span>•</span>
+                        <span>VITALITY: +3 to +8</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-blue-400">
+                        <span>•</span>
+                        <span>EXPERIENCE: +10 to +30 XP</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-blue-400">
+                        <span>•</span>
+                        <span>RISK: MINIMAL</span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.button>
+              </div>
+
+              <motion.div
+                className="mt-6 text-center text-xs text-muted-foreground"
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1.5, repeat: Number.POSITIVE_INFINITY }}
+              >
+                {"// REMEMBER: Every choice shapes your biological destiny"}
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Placeholder for the existing Pill Choice Modal, which is now handled by screenFlash and the main scanner logic */}
+      {/* The logic for showing the pill choice is now integrated into handleScan and handlePillChoice */}
+    </div>
+  )
+}
