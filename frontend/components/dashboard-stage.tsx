@@ -772,7 +772,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
 
         {/* Theme Toggle */}
         <motion.button
-          whileHover={{ scale: 1.1, rotate: 180 }}
+          whileHover={{ scale: 1.1, x: 5 }}
           whileTap={{ scale: 0.9 }}
           onClick={toggleTheme}
           onMouseEnter={() => setHoveredNav("theme")}
@@ -796,7 +796,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
 
         {/* Settings Button */}
         <motion.button
-          whileHover={{ scale: 1.1, rotate: 90 }}
+          whileHover={{ scale: 1.1, x: 5 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => {
             setShowSettings(!showSettings)
@@ -926,7 +926,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: -400, opacity: 0 }}
                 transition={{ type: "spring", damping: 30, stiffness: 300 }}
-                className="fixed left-0 top-0 h-screen w-96 glass-panel border-r-2 border-primary z-[110] p-8 overflow-y-auto shadow-2xl"
+                className="fixed left-20 top-0 h-screen w-96 bg-background/80 border-r-2 border-primary z-[510] p-8 overflow-y-auto shadow-2xl"
               >
                 <div className="flex items-center justify-between mb-8">
                   <h2 className="text-3xl font-bold text-primary pixel-glow">PROFILE</h2>

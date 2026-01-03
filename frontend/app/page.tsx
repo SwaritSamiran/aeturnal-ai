@@ -83,6 +83,7 @@ export default function Home() {
             style={{
               left: `${(i * 17) % 100}%`,
               top: `${(i * 23) % 100}%`,
+              willChange: 'transform, opacity',
             }}
             animate={{
               y: [0, -30, 0],
@@ -111,6 +112,7 @@ export default function Home() {
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
+              willChange: 'transform, opacity',
             }}
             animate={{
               opacity: [0.4, 0.9, 0.4],
