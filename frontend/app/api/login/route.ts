@@ -1,75 +1,81 @@
 // app/api/login/route.ts
-// 🔵 BACKEND API: User Login (Supabase Version)
-
 import { type NextRequest, NextResponse } from "next/server"
-import bcrypt from "bcryptjs"
-import { supabase } from "@/lib/db" // Changed to import the supabase client
+import { createClient } from "@supabase/supabase-js"
+
+// Create Supabase client for server-side operations
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("[v0] Login request received")
-
-    // 1. Parse request body
     const body = await request.json()
-    const { username, password } = body
+    const { email, password } = body
 
-    // 2. Validate input
-    if (!username || !password) {
-      return NextResponse.json({ success: false, error: "Username and password are required" }, { status: 400 })
+    if (!email || !password) {
+      return NextResponse.json(
+        { success: false, error: "Missing email or password" },
+        { status: 400 }
+      )
     }
 
-    console.log("[v0] Looking up user:", username)
+    // Sign in with Supabase Auth
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
 
-    // 3. Find user in database using Supabase syntax
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select(`
-        id, username, password_hash, level, current_xp, xp_needed, rank, 
-        vitality, max_vitality, selected_class, profile_picture, bio,
-        current_streak, total_scans, good_choices, bad_choices
-      `)
-      .eq('username', username)
+    if (error || !data.user) {
+      console.error("Login error:", error)
+      return NextResponse.json(
+        { success: false, error: "Invalid credentials" },
+        { status: 401 }
+      )
+    }
+
+    // Get user profile
+    const { data: userProfile, error: profileError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", data.user.id)
       .single()
 
-    if (userError || !user) {
-      console.log("[v0] User not found or DB error:", userError)
-      return NextResponse.json({ success: false, error: "Invalid username or password" }, { status: 401 })
+    if (profileError || !userProfile) {
+      console.error("Profile fetch error:", profileError)
+      return NextResponse.json(
+        { success: false, error: "User profile not found" },
+        { status: 404 }
+      )
     }
 
-    console.log("[v0] User found, verifying password")
+    // Convert numeric fields to strings for frontend compatibility
+    userProfile.age = userProfile.age ? String(userProfile.age) : ""
+    userProfile.weight_kg = userProfile.weight_kg ? String(userProfile.weight_kg) : ""
+    userProfile.height_cm = userProfile.height_cm ? String(userProfile.height_cm) : ""
 
-    // 4. Verify password
-    const passwordValid = await bcrypt.compare(password, user.password_hash)
-
-    if (!passwordValid) {
-      return NextResponse.json({ success: false, error: "Invalid username or password" }, { status: 401 })
-    }
-
-    console.log("[v0] Login successful for user:", user.id)
-
-    // 5. Return user data formatted for the frontend
-    return NextResponse.json({
+    // Create session cookie
+    const response = NextResponse.json({
       success: true,
-      user: {
-        id: user.id,
-        username: user.username,
-        level: user.level,
-        currentXp: user.current_xp,
-        xpNeeded: user.xp_needed,
-        rank: user.rank,
-        vitality: user.vitality,
-        maxVitality: user.max_vitality,
-        selectedClass: user.selected_class,
-        profilePicture: user.profile_picture,
-        bio: user.bio,
-        currentStreak: user.current_streak,
-        totalScans: user.total_scans,
-        goodChoices: user.good_choices,
-        bad_choices: user.bad_choices,
-      },
+      user: userProfile,
+      session: data.session,
     })
+
+    // Store session token in httpOnly cookie for security
+    if (data.session) {
+      response.cookies.set({
+        name: "auth-token",
+        value: data.session.access_token,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+      })
+    }
+
+    return response
   } catch (error) {
-    console.error("[v0] Login error:", error)
-    return NextResponse.json({ success: false, error: "Login failed. Please try again." }, { status: 500 })
+    console.error("Login error:", error)
+    return NextResponse.json({ success: false, error: "Server error" }, { status: 500 })
   }
 }

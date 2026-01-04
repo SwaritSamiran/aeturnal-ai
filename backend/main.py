@@ -1,100 +1,186 @@
 import os
+import json
+import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from google import genai
+from pydantic import BaseModel, Field, validator
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI()
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Enable CORS so your Next.js app can talk to this server
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+app = FastAPI(
+    title="Aeturnal-AI Backend",
+    description="Health-optimized food analysis with Gemini AI",
+    version="1.0.0"
 )
 
-# Initialize the Google GenAI Client
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Enable CORS for frontend communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # Next.js dev
+        "http://localhost:5173",  # Vite dev
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        # Add production URLs in production environment
+        os.getenv("FRONTEND_URL", "http://localhost:3000"),
+    ],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    allow_credentials=True,
+)
+
+# Initialize Google GenAI Client
+API_KEY = os.getenv("GEMINI_API_KEY")
+if not API_KEY:
+    logger.warning("⚠️  GEMINI_API_KEY not set. Set it before making requests.")
+else:
+    genai.configure(api_key=API_KEY)
+
 MODEL_ID = "gemma-3-27b-it"
 
-# This matches the UserData type in your page.tsx
+# ============================================
+# VALIDATION MODELS
+# ============================================
+
 class UserContext(BaseModel):
-    username: str
-    selectedClass: str
-    weight: str
-    height: str
-    age: str
-    medicalHistory: str
-    dailyActivity: str
+    username: str = Field(..., min_length=1, max_length=100)
+    selectedClass: str = Field(default="general", max_length=100)
+    weight: str = Field(..., description="Weight in kg")
+    height: str = Field(..., description="Height in cm")
+    age: str = Field(..., description="Age in years")
+    medicalHistory: str = Field(default="", max_length=500)
+    dailyActivity: str = Field(..., max_length=200)
+
+    @validator("username", "selectedClass")
+    def sanitize_strings(cls, v):
+        """Prevent injection attacks"""
+        return v.strip()[:100]
 
 class ScanRequest(BaseModel):
-    food_item: str
+    food_item: str = Field(..., min_length=1, max_length=200)
     user_context: UserContext
+
+    @validator("food_item")
+    def sanitize_food_item(cls, v):
+        """Prevent injection attacks"""
+        return v.strip()[:200]
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for deployment verification"""
+    return {
+        "status": "ok",
+        "service": "aeturnal-ai-backend",
+        "model": MODEL_ID,
+        "ai_configured": API_KEY is not None
+    }
 
 @app.post("/api/scan")
 async def scan_food(request: ScanRequest):
+    """
+    🔴 FOOD SCAN ENDPOINT
+    
+    Analyzes food for a specific user's health profile using Gemini AI
+    
+    Request: {
+        "food_item": "Monster Energy Drink",
+        "user_context": {...}
+    }
+    
+    Response: {
+        "sensor_readout": "...",
+        "red_pill": {"truth": "...", "vitality_delta": int, "xp_delta": int},
+        "blue_pill": {"optimization": "...", "vitality_delta": int, "xp_delta": int}
+    }
+    """
     try:
-        # Construct the "Health Oracle" prompt with Intent-Inference
-        prompt = f"""
-        <start_of_turn>user
-        ROLE: You are the Aeturnus-AI Biological Doctor/Oracle, a hyper-intelligent system designed to optimize human evolution.
+        if not API_KEY:
+            logger.error("❌ AI client not configured")
+            raise HTTPException(
+                status_code=503,
+                detail="AI service not configured. Set GEMINI_API_KEY environment variable."
+            )
 
-        [SUBJECT_DOSSIER]
-        - NAME: {request.user_context.username}
-        - CLASS_PROTOCOL: {request.user_context.selectedClass} 
-        - BIOMETRICS: {request.user_context.weight}kg / {request.user_context.height}cm / Age {request.user_context.age}
-        - MEDICAL_VULNERABILITIES: {request.user_context.medicalHistory if request.user_context.medicalHistory else "None Stated"}
-        - ENERGY_EXPENDITURE: {request.user_context.dailyActivity}
+        logger.info(f"🔍 Analyzing food: {request.food_item} for {request.user_context.username}")
 
-        [INPUT_SIGNAL]: Scanning {request.food_item}
+        # Simplified prompt for Gemma compatibility
+        prompt = f"""Analyze this food item for health impact. Respond ONLY with valid JSON, no other text.
 
-        [PROCESSING_INSTRUCTIONS]:
-        1. SIMULATE: Calculate the glycemic load and inflammatory response of {request.food_item} specifically for a {request.user_context.age}-year-old body weighing {request.user_context.weight}kg. You basically have to act like a health trainer of the user, to help them evolve according to what their current health information is, and what class they have chosen. Do not use language which the user cannot understand.
-        2. ALIGNMENT: Check if this food violates the core mission of the '{request.user_context.selectedClass}' protocol.
-        3. RED_PILL (The Biological Truth): If, the food really is bad for the user, provide a brutal, high-tech breakdown of how this food damages the subject's current biometrics. You have to kind of think about the intent of the user, and state that too in short. (for example, if the user is drinking monster energy drink at 12 am in the night, which of course is a very bad thing to do and is very negative for the health, but the user might really have to stay awake that night. so you need to kind of infer the intent of the user by assuming or something like that and stating it as well. that if you really need to stay awake... maybe like this. and you have to manage the blue pill accordingly as well. This was just an example). If it ain't that bad, then you can just keep it as it is, there's no need to be penalty. but you could state a better option anyway in the blue pill. You are the smartest being, you have to think and adjust the pills. You know you cannot charge a penalty if the food entered by the user is healthy for them. we will have to show the red pill in every case so that is why you are explicitly being told to take care of such situations. 
-        4. BLUE_PILL (The Optimized Path): Suggest a food that achieves the same psychological craving but fulfills the '{request.user_context.selectedClass}' requirements. You have to take into consideration everything, every information about the user and give the best one for them. also along with the healthier alternative in the blue pill, you can also give a way to neutralize the red pill option if the user can't do the alternative option.
-        5. CALIBRATE_REWARDS: 
-        - Assign Vitality impact (-100 to +20). Harshly penalize items that trigger stated Medical Vulnerabilities.
-        - Assign XP reward (0 to 100). Reward the Blue Pill significantly higher for discipline.
-        6. Give everything in very structured way. you know how our app works now so you have to handle it all.
-        OUTPUT ONLY VALID JSON:
-        {{
-        "sensor_readout": "A 1-sentence technical analysis of the food's quality.",
-        "red_pill": {{ 
-            "truth": "Brutal biochemical description...", 
-            "vitality_delta": [DYNAMIC_INT], 
-            "xp_delta": [DYNAMIC_INT] 
-        }},
-        "blue_pill": {{ 
-            "optimization": "The superior alternative...", 
-            "vitality_delta": [DYNAMIC_INT], 
-            "xp_delta": [DYNAMIC_INT] 
-        }}
-        }}
-        <end_of_turn>
-        <start_of_turn>model
-        """
+Food: {request.food_item}
+User: {request.user_context.username}, Age {request.user_context.age}, Weight {request.user_context.weight}kg
 
-        # EXECUTING THE BRAIN
-        response = client.models.generate_content(
-            model=MODEL_ID,
-            contents=prompt,
-            config={"response_mime_type": "application/json"}
-        )
+Return JSON with this EXACT structure:
+{{
+  "sensor_readout": "Brief 1-sentence analysis",
+  "red_pill": {{
+    "truth": "Health risks (max 100 chars)",
+    "vitality_delta": -10,
+    "xp_delta": 10
+  }},
+  "blue_pill": {{
+    "optimization": "Healthier alternative (max 100 chars)",
+    "vitality_delta": 10,
+    "xp_delta": 50
+  }}
+}}"""
+
+        logger.info(f"📡 Calling Gemini API with model: {MODEL_ID}")
+
+        # Call Gemini API
+        model = genai.GenerativeModel(MODEL_ID)
+        response = model.generate_content(prompt)
+
+        # Parse and validate response
+        response_text = response.text
+        logger.info(f"🔍 Raw response from Gemma: {response_text[:200]}...")
         
-        return response.parsed # Returns the JSON directly to your frontend
+        # Extract JSON from response (handle potential markdown code blocks)
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+        
+        # Try to find JSON object if not found
+        if "{" in response_text:
+            start = response_text.index("{")
+            end = response_text.rindex("}") + 1
+            response_text = response_text[start:end]
+        
+        logger.info(f"📦 Extracted JSON: {response_text[:200]}...")
+        result = json.loads(response_text)
+        logger.info(f"✅ Analysis complete for: {request.food_item}")
+        
+        return result
 
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ Invalid JSON from AI model: {str(e)}")
+        logger.error(f"📋 Full response text: {response_text}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI response was not valid JSON. Full response: {response_text[:500]}"
+        )
     except Exception as e:
-        print(f"ERROR: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Error during food scan: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print("🚀 Starting Aeturnal-AI Backend...")
+    print(f"📍 Server: http://0.0.0.0:8000")
+    print(f"📊 Docs: http://0.0.0.0:8000/docs")
+    print(f"🧠 AI Model: {MODEL_ID}")
+    print(f"🔐 GEMINI_API_KEY: {'✅ Configured' if API_KEY else '❌ Not configured'}")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+
 
 
 
