@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import type { ChangeEvent } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -94,6 +95,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
   const [darkMode, setDarkMode] = useState(false)
   const [vitality, setVitality] = useState(100)
   const [foodInput, setFoodInput] = useState("")
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [scanResult, setScanResult] = useState("")
   const [showPillChoice, setShowPillChoice] = useState(false)
   const [pendingScan, setPendingScan] = useState<any>(null)
@@ -235,125 +237,94 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
     document.documentElement.classList.toggle("dark")
   }
 
+  const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        setUploadedImage(reader.result)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
   const handleScan = async () => {
-    if (!foodInput) return
+  if (!foodInput) return
 
-    console.log("[v0] Starting food scan for:", foodInput)
+  console.log("[v0] Starting food scan for:", foodInput)
 
-    /*
-    ========================================
-    🔴 BACKEND INTEGRATION POINT #1: FOOD SCAN API
-    ========================================
-
-    WHAT TO DO:
-    Replace this function with your AI model API call
-
-    SEND TO BACKEND:
-    {
-      foodInput: string,              // Food name or description from user
-      imageFile: File | null,         // Optional: Food package image
-      userData: {
-        age: string,
-        weight: string,
-        height: string,
-        medicalHistory: string,       // Health conditions (diabetes, etc.)
-        dailyActivity: string,
-        selectedClass: string          // User's health goal class
-      }
-    }
-
-    EXPECTED RESPONSE FROM YOUR AI MODEL:
-    {
-      foodName: string,                // Cleaned food name
-      calories: number,
-      protein: number,
-      carbs: number,
-      fats: number,
-      sugar: number,                   // ADD THIS - important for health
-      sodium: number,                  // ADD THIS - important for health
-      ingredients: string[],           // LIST OF INGREDIENTS
-      allergens: string[],             // ALLERGENS DETECTED
-      isHealthy: boolean,              // Based on user's profile
-      healthScore: number,             // 0-100 score
-      redPillWarnings: string[],       // Array of warnings/bad effects
-      bluePillAlternatives: string[],  // Array of healthier alternatives
-      personalizedAdvice: string       // Custom advice based on user's health class
-    }
-
-    EXAMPLE API CALL:
-    */
-
-    // Uncomment and use this for your backend
-    /*
-    try {
-      const response = await fetch('/api/analyze-food', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          foodInput,
-          userData: {
-            age: userData.age,
-            weight: userData.weight,
-            height: userData.height,
-            medicalHistory: userData.medicalHistory,
-            dailyActivity: userData.dailyActivity,
-            selectedClass: userData.selectedClass
-          }
-        })
+  try {
+    // Call your API route
+    const response = await fetch('/api/analyze-food', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        foodInput,
+        imageBase64: uploadedImage,
+        userData: {
+          age: userData.age,
+          weight: userData.weight,
+          height: userData.height,
+          medicalHistory: userData.medicalHistory,
+          dailyActivity: userData.dailyActivity,
+          selectedClass: userData.selectedClass
+        }
       })
+    })
 
-      const aiResponse = await response.json()
+    const result = await response.json()
 
-      const scanData = {
-        food: aiResponse.foodName,
-        calories: aiResponse.calories,
-        protein: aiResponse.protein,
-        carbs: aiResponse.carbs,
-        fats: aiResponse.fats,
-        sugar: aiResponse.sugar,
-        sodium: aiResponse.sodium,
-        ingredients: aiResponse.ingredients,
-        allergens: aiResponse.allergens,
-        isHealthy: aiResponse.isHealthy,
-        healthScore: aiResponse.healthScore,
-        redPillWarnings: aiResponse.redPillWarnings,
-        bluePillAlternatives: aiResponse.bluePillAlternatives,
-        personalizedAdvice: aiResponse.personalizedAdvice
-      }
-
-      console.log("[v0] AI Response received:", scanData)
-      setPendingScan(scanData)
-      setScanResult(JSON.stringify(scanData, null, 2))
-      setShowPillChoice(true)
-      setActiveTab("intel")
-      */
-
-    // MOCK DATA (Remove this when you connect backend)
-    const mockScanData = {
-      food: foodInput,
-      calories: Math.floor(Math.random() * 500) + 100,
-      protein: Math.floor(Math.random() * 30) + 5,
-      carbs: Math.floor(Math.random() * 50) + 10,
-      fats: Math.floor(Math.random() * 25) + 5,
-      sugar: Math.floor(Math.random() * 30) + 2,
-      sodium: Math.floor(Math.random() * 800) + 100,
-      isHealthy: Math.random() > 0.5,
-      healthRisk: "moderate",
-      redPillConsequences: "High sugar content may cause energy crash. -15 vitality",
-      bluePillAlternative: "Switch to water or green tea. +10 vitality, +50 XP",
-      detailedAnalysis: `NUTRITIONAL_BREAKDOWN:\n- Calories: ${Math.floor(Math.random() * 500) + 100}\n- Warning: High in processed ingredients`,
+    if (!result.success) {
+      console.error('API Error:', result.error)
+      return
     }
 
-    console.log("[v0] Mock scan data created:", mockScanData)
-    console.log("[v0] Setting pendingScan and showPillChoice to true")
+    const aiData = result.data
 
-    setScanResult(mockScanData.detailedAnalysis)
-    setPendingScan(mockScanData)
+    // Create the scan data object
+    const scanData = {
+      food: aiData.foodName,
+      calories: aiData.calories,
+      protein: aiData.protein,
+      carbs: aiData.carbs,
+      fats: aiData.fats,
+      sugar: aiData.sugar,
+      sodium: aiData.sodium,
+      isHealthy: aiData.isHealthy,
+      healthScore: aiData.healthScore,
+      redPillConsequences: aiData.redPillWarnings.join('. '),
+      bluePillAlternative: aiData.bluePillAlternatives.join('. '),
+      detailedAnalysis: `
+FOOD: ${aiData.foodName}
+HEALTH SCORE: ${aiData.healthScore}/100
+
+NUTRITION:
+- Calories: ${aiData.calories}
+- Protein: ${aiData.protein}g
+- Carbs: ${aiData.carbs}g
+- Fats: ${aiData.fats}g
+- Sugar: ${aiData.sugar}g
+- Sodium: ${aiData.sodium}mg
+
+INGREDIENTS: ${aiData.ingredients.join(', ')}
+ALLERGENS: ${aiData.allergens.length > 0 ? aiData.allergens.join(', ') : 'None detected'}
+
+PERSONALIZED ADVICE:
+${aiData.personalizedAdvice}
+      `.trim()
+    }
+
+    console.log("[v0] AI Response received:", scanData)
+
+    // Show the results and pill choice
+    setScanResult(scanData.detailedAnalysis)
+    setPendingScan(scanData)
     setShowPillChoice(true)
     setActiveTab("intel")
 
-    console.log("[v0] States updated, pill choice should appear")
-
+    // Achievement: First scan
     if (!achievements[0].unlocked) {
       const updatedAchievements = [...achievements]
       updatedAchievements[0] = {
@@ -364,23 +335,37 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
       setAchievements(updatedAchievements)
     }
 
+    // Update challenge progress
     const updatedChallenges = [...dailyChallenges]
     if (!updatedChallenges[0].completed) {
-      updatedChallenges[0].progress = Math.min(updatedChallenges[0].progress + 1, updatedChallenges[0].goal)
+      updatedChallenges[0].progress = Math.min(
+        updatedChallenges[0].progress + 1,
+        updatedChallenges[0].goal
+      )
       if (updatedChallenges[0].progress >= updatedChallenges[0].goal) {
         updatedChallenges[0].completed = true
-        // Award XP
         const newXP = userData.experience + updatedChallenges[0].xpReward
         if (newXP >= 1000) {
-          // Assuming 1000 XP for level up for simplicity
-          setUserData({ ...userData, experience: newXP - 1000, level: userData.level + 1 })
+          setUserData({ 
+            ...userData, 
+            experience: newXP - 1000, 
+            level: userData.level + 1 
+          })
         } else {
           setUserData({ ...userData, experience: newXP })
         }
       }
       setDailyChallenges(updatedChallenges)
+
+
+
     }
+
+  } catch (error) {
+    console.error('[v0] Error scanning food:', error)
+    alert('Failed to scan food. Please try again.')
   }
+}
 
   const handlePillChoice = (choice: "red" | "blue") => {
     // ========================================
@@ -1465,6 +1450,14 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                       </div>
 
                       <div className="border-2 border-dashed border-accent/50 rounded-lg p-8 text-center cursor-pointer hover:border-accent transition-colors hover:bg-accent/5">
+                        <input
+                          id="image-upload"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleImageUpload}
+                        />
+                        <label htmlFor="image-upload" className="block cursor-pointer">
                         <div className="text-5xl mb-2">📦</div>
                         <Upload className="w-12 h-12 text-accent mx-auto mb-3" />
                         <p className="text-sm text-muted-foreground font-bold">UPLOAD_PACKAGE_IMAGE</p>
@@ -1472,6 +1465,10 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                           {"// SCAN_NUTRITION_LABEL_OR_INGREDIENT_LIST"}
                         </p>
                         <p className="text-xs text-accent/70 mt-2">{"Supported: JPG, PNG, PDF"}</p>
+                        {uploadedImage && (
+                          <p className="text-xs text-emerald-400 mt-2">IMAGE_SELECTED // Ready for analysis</p>
+                        )}
+                        </label>
                       </div>
 
                       <Button
@@ -1856,7 +1853,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                       </div>
                     </div>
                     <h3 className="text-xl font-bold text-red-500 mb-2">RED_PILL</h3>
-                    <p className="text-sm text-muted-foreground mb-4">IGNORE_WARNINGS // Proceed with consumption</p>
+                    <p className="text-sm text-muted-foreground mb-2">IGNORE_WARNINGS // Proceed with consumption</p>
                     <div className="space-y-2 text-xs">
                       <div className="flex items-center gap-2 text-red-400">
                         <span>•</span>
@@ -1866,10 +1863,15 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                         <span>•</span>
                         <span>EXPERIENCE: 0 XP</span>
                       </div>
-                      <div className="flex items-center gap-2 text-red-400">
+                      <div className="flex items-center gap-2 text-red-400 mb-2">
                         <span>•</span>
                         <span>RISK: HIGH</span>
                       </div>
+                      {pendingScan.redPillConsequences && (
+                        <div className="mt-1 max-h-32 overflow-y-auto pr-1 text-xs text-red-300 whitespace-pre-line">
+                          {pendingScan.redPillConsequences}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </motion.button>
@@ -1888,7 +1890,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                       </div>
                     </div>
                     <h3 className="text-xl font-bold text-blue-500 mb-2">BLUE_PILL</h3>
-                    <p className="text-sm text-muted-foreground mb-4">FOLLOW_PROTOCOLS // Optimal health path</p>
+                    <p className="text-sm text-muted-foreground mb-2">FOLLOW_PROTOCOLS // Optimal health path</p>
                     <div className="space-y-2 text-xs">
                       <div className="flex items-center gap-2 text-blue-400">
                         <span>•</span>
@@ -1898,10 +1900,15 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                         <span>•</span>
                         <span>EXPERIENCE: +10 to +30 XP</span>
                       </div>
-                      <div className="flex items-center gap-2 text-blue-400">
+                      <div className="flex items-center gap-2 text-blue-400 mb-2">
                         <span>•</span>
                         <span>RISK: MINIMAL</span>
                       </div>
+                      {pendingScan.bluePillAlternative && (
+                        <div className="mt-1 max-h-32 overflow-y-auto pr-1 text-xs text-blue-300 whitespace-pre-line">
+                          {pendingScan.bluePillAlternative}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </motion.button>

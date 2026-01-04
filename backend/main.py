@@ -12,14 +12,16 @@ app = FastAPI()
 # Enable CORS so your Next.js app can talk to this server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Initialize the Google GenAI Client
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL_ID = "gemma-3-27b-it"
+MODEL_ID = "gemini-2.5-flash"  # Changed from gemma-3-27b-it as it supports JSON mode
+
 
 # This matches the UserData type in your page.tsx
 class UserContext(BaseModel):
@@ -31,9 +33,11 @@ class UserContext(BaseModel):
     medicalHistory: str
     dailyActivity: str
 
+
 class ScanRequest(BaseModel):
     food_item: str
     user_context: UserContext
+
 
 @app.post("/api/scan")
 async def scan_food(request: ScanRequest):
@@ -83,20 +87,36 @@ async def scan_food(request: ScanRequest):
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=prompt,
-            config={"response_mime_type": "application/json"}
+            config={"response_mime_type": "application/json"},
         )
-        
-        return response.parsed # Returns the JSON directly to your frontend
 
+        # Prefer structured JSON if available, otherwise fall back to text
+        data = getattr(response, "parsed", None)
+
+        if data is None:
+            raw_text = getattr(response, "text", None)
+
+            # Fallback for SDK versions that don't support response_mime_type
+            if not raw_text and getattr(response, "candidates", None):
+                parts = response.candidates[0].content.parts or []
+                raw_text = "".join(getattr(p, "text", "") for p in parts)
+
+            if not raw_text:
+                raise ValueError("Model returned empty response")
+
+            try:
+                data = json.loads(raw_text)
+            except json.JSONDecodeError:
+                raise ValueError("Model returned non-JSON response: " + raw_text[:200])
+
+        print("Response:", data)
+        return data  # Returns the JSON directly to your frontend
     except Exception as e:
         print(f"ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-
-
-
