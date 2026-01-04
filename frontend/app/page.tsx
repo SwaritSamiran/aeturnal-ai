@@ -1,15 +1,18 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { LandingStage } from "@/components/landing-stage"
 import { OnboardingStage } from "@/components/onboarding-stage"
 import { ClassSelectionStage } from "@/components/class-selection-stage"
 import { DashboardStage } from "@/components/dashboard-stage"
+import { createClient } from "@supabase/supabase-js"
 
 export type Stage = "landing" | "onboarding" | "class" | "dashboard"
 
 export type UserData = {
+  id?: string
+  email: string
   username: string
   password: string
   age: string
@@ -21,11 +24,18 @@ export type UserData = {
   level: number
   rank: string
   experience: number
+  vitality?: number
+  current_xp?: number
+  good_choices?: number
+  bad_choices?: number
+  xp_needed?: number
 }
 
 export default function Home() {
   const [stage, setStage] = useState<Stage>("landing")
   const [userData, setUserData] = useState<UserData>({
+    id: "",
+    email: "",
     username: "",
     password: "",
     age: "",
@@ -39,14 +49,100 @@ export default function Home() {
     experience: 0,
   })
 
-  const handleInitialize = (username: string, password: string) => {
-    setUserData({ ...userData, username, password })
+  // On mount, check if user is already authenticated
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
+        
+        const { data: { user }, error } = await supabase.auth.getUser()
+        
+        if (user && !error) {
+          // User is authenticated, fetch their profile
+          const { data: profile } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", user.id)
+            .single()
+          
+          if (profile) {
+            setUserData({
+              id: profile.id,
+              email: profile.email,
+              username: profile.username,
+              password: "", // Don't store password in state
+              age: profile.age ? String(profile.age) : "",
+              weight: profile.weight_kg ? String(profile.weight_kg) : "",
+              height: profile.height_cm ? String(profile.height_cm) : "",
+              medicalHistory: profile.medical_history || "",
+              dailyActivity: profile.daily_activity || "",
+              selectedClass: profile.selected_class || "general",
+              level: profile.level || 1,
+              rank: profile.rank || "NOVICE",
+              experience: profile.current_xp || 0,
+              vitality: profile.vitality,
+              current_xp: profile.current_xp,
+              good_choices: profile.good_choices,
+              bad_choices: profile.bad_choices,
+              xp_needed: profile.xp_needed,
+            })
+            setStage("dashboard")
+          }
+        }
+      } catch (error) {
+        console.error("Auth check error:", error)
+      }
+    }
+    
+    checkAuth()
+  }, [])
+
+  const handleInitialize = (email: string, username: string, password: string) => {
+    setUserData({ ...userData, email, username, password })
     setStage("onboarding")
   }
 
-  const handleReconnect = (username: string, password: string) => {
-    setUserData({ ...userData, username, password })
-    setStage("dashboard")
+  const handleReconnect = async (email: string, username: string, password: string) => {
+    try {
+      // Call login API to get user data
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
+      
+      const result = await response.json()
+      
+      if (result.success && result.user) {
+        // Populate userData with full user profile from database
+        setUserData({
+          id: result.user.id,
+          email: result.user.email,
+          username: result.user.username,
+          password: "", // Don't store password
+          age: result.user.age ? String(result.user.age) : "",
+          weight: result.user.weight_kg ? String(result.user.weight_kg) : "",
+          height: result.user.height_cm ? String(result.user.height_cm) : "",
+          medicalHistory: result.user.medical_history || "",
+          dailyActivity: result.user.daily_activity || "",
+          selectedClass: result.user.selected_class || "general",
+          level: result.user.level || 1,
+          rank: result.user.rank || "NOVICE",
+          experience: result.user.current_xp || 0,
+          vitality: result.user.vitality,
+          current_xp: result.user.current_xp,
+          good_choices: result.user.good_choices,
+          bad_choices: result.user.bad_choices,
+          xp_needed: result.user.xp_needed,
+        })
+        setStage("dashboard")
+      }
+    } catch (error) {
+      console.error("Login error:", error)
+    }
   }
 
   const handleBack = () => {
@@ -57,6 +153,8 @@ export default function Home() {
   const handleLogout = () => {
     setStage("landing")
     setUserData({
+      id: "",
+      email: "",
       username: "",
       password: "",
       age: "",
@@ -74,7 +172,7 @@ export default function Home() {
   const foodIcons = ["🍜", "🥗", "🍎", "🥑", "🍗", "🥦", "🍕", "🍔", "🌮", "🍱", "🥤"]
 
   return (
-    <main className="min-h-screen bg-background cyber-grid gradient-bg relative overflow-hidden">
+    <main className="min-h-screen bg-background cyber-grid gradient-bg relative overflow-hidden" suppressHydrationWarning>
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         {foodIcons.map((food, i) => (
           <motion.div

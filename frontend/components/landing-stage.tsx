@@ -5,19 +5,23 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Zap, Activity, ArrowLeft } from "lucide-react"
 import { useState, useEffect } from "react"
+import { useToast } from "@/hooks/use-toast"
 
 interface LandingStageProps {
-  onInitialize: (username: string, password: string) => void
-  onReconnect: (username: string, password: string) => void
+  onInitialize: (email: string, username: string, password: string) => void
+  onReconnect: (email: string, username: string, password: string) => void
 }
 
 export function LandingStage({ onInitialize, onReconnect }: LandingStageProps) {
   const [bioBattery, setBioBattery] = useState(85)
   const [showSignup, setShowSignup] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
+  const [email, setEmail] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -30,21 +34,74 @@ export function LandingStage({ onInitialize, onReconnect }: LandingStageProps) {
     return () => clearInterval(interval)
   }, [])
 
-  const handleSignupSubmit = () => {
-    if (username && password && password === confirmPassword) {
-      onInitialize(username, password)
+  const handleSignupSubmit = async () => {
+    if (!email || !username || !password || password !== confirmPassword) {
+      toast({ title: "Validation Error", description: "Please fill all fields and confirm password" })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // Include cookies
+        body: JSON.stringify({ email, username, password }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        toast({ title: "Registration Error", description: data.error || "Registration failed" })
+        return
+      }
+
+      toast({ title: "Success", description: "Account created! Proceeding to onboarding..." })
+      onInitialize(email, username, password)
+    } catch (error) {
+      console.error("Registration error:", error)
+      toast({ title: "Error", description: "Registration failed" })
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleLoginSubmit = () => {
-    if (username && password) {
-      onReconnect(username, password)
+  const handleLoginSubmit = async () => {
+    if (!email || !password) {
+      toast({ title: "Validation Error", description: "Please enter email and password" })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // Include cookies
+        body: JSON.stringify({ email, password }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        toast({ title: "Login Error", description: data.error || "Login failed" })
+        return
+      }
+
+      toast({ title: "Success", description: "Login successful! Entering dashboard..." })
+      onReconnect(email, username || data.user.username, password)
+    } catch (error) {
+      console.error("Login error:", error)
+      toast({ title: "Error", description: "Login failed" })
+    } finally {
+      setIsLoading(false)
     }
   }
 
   const handleBack = () => {
     setShowSignup(false)
     setShowLogin(false)
+    setEmail("")
     setUsername("")
     setPassword("")
     setConfirmPassword("")
@@ -150,6 +207,16 @@ export function LandingStage({ onInitialize, onReconnect }: LandingStageProps) {
             </Button>
             <div className="text-center text-sm text-primary mb-4 font-bold">{">> SIGN UP"}</div>
             <div>
+              <label className="text-xs text-muted-foreground mb-1 block">EMAIL</label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bg-background/50 border-primary/50 text-foreground"
+                placeholder="Enter email"
+              />
+            </div>
+            <div>
               <label className="text-xs text-muted-foreground mb-1 block">USERNAME</label>
               <Input
                 type="text"
@@ -181,10 +248,10 @@ export function LandingStage({ onInitialize, onReconnect }: LandingStageProps) {
             </div>
             <Button
               onClick={handleSignupSubmit}
-              disabled={!username || !password || password !== confirmPassword}
+              disabled={!email || !username || !password || password !== confirmPassword || isLoading}
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90 neon-border border-primary h-12 text-base font-bold"
             >
-              CREATE ACCOUNT
+              {isLoading ? "CREATING..." : "CREATE ACCOUNT"}
             </Button>
           </div>
         ) : (
@@ -195,13 +262,13 @@ export function LandingStage({ onInitialize, onReconnect }: LandingStageProps) {
             </Button>
             <div className="text-center text-sm text-primary mb-4 font-bold">{">> LOG IN"}</div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">USERNAME</label>
+              <label className="text-xs text-muted-foreground mb-1 block">EMAIL</label>
               <Input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="bg-background/50 border-primary/50 text-foreground"
-                placeholder="Enter username"
+                placeholder="Enter email"
               />
             </div>
             <div>
@@ -216,10 +283,10 @@ export function LandingStage({ onInitialize, onReconnect }: LandingStageProps) {
             </div>
             <Button
               onClick={handleLoginSubmit}
-              disabled={!username || !password}
+              disabled={!email || !password || isLoading}
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90 neon-border border-primary h-12 text-base font-bold"
             >
-              ACCESS SYSTEM
+              {isLoading ? "LOGGING IN..." : "ACCESS SYSTEM"}
             </Button>
           </div>
         )}

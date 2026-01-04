@@ -205,6 +205,18 @@ export async function POST(request: Request) {
       personalizedAdvice: String(
         analysisData.personalizedAdvice || "No advice generated."
       ),
+
+      // Structured red/blue pill payload for the dashboard
+      redPill: {
+        truth: String(redPill.truth || ""),
+        vitalityDelta: Number(redPill.vitality_delta ?? 0),
+        xpDelta: Number(redPill.xp_delta ?? 0),
+      },
+      bluePill: {
+        optimization: String(bluePill.optimization || ""),
+        vitalityDelta: Number(bluePill.vitality_delta ?? 0),
+        xpDelta: Number(bluePill.xp_delta ?? 0),
+      },
     }
 
     // STEP 6: Return the transformed analysis to the frontend

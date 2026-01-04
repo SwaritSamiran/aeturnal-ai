@@ -6,6 +6,7 @@ import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import type { UserData } from "@/app/page"
 import { Droplets, Scale, Dumbbell, Heart, ArrowLeft } from "lucide-react"
+import { toast } from "sonner"
 
 interface ClassSelectionStageProps {
   onNext: () => void
@@ -55,10 +56,49 @@ const classes = [
 
 export function ClassSelectionStage({ onNext, onBack, userData, setUserData }: ClassSelectionStageProps) {
   const [selected, setSelected] = useState<string>("")
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleSelect = (classId: string) => {
     setSelected(classId)
     setUserData({ ...userData, selectedClass: classId })
+  }
+
+  const handleComplete = async () => {
+    if (!selected) return
+    
+    setIsLoading(true)
+    try {
+      // Call server-side API to update user profile (properly authenticated)
+      const response = await fetch("/api/user/update", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // Include httpOnly cookies
+        body: JSON.stringify({
+          age: userData.age,
+          weight_kg: userData.weight,
+          height_cm: userData.height,
+          medical_history: userData.medicalHistory,
+          daily_activity: userData.dailyActivity,
+          selected_class: userData.selectedClass,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        console.error("Update failed:", result.error)
+        toast.error(result.error || "Failed to save profile")
+        return
+      }
+
+      toast.success("Profile saved! Entering dashboard...")
+      onNext()
+    } catch (error) {
+      console.error("Error saving profile:", error)
+      toast.error("Error saving profile")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -113,11 +153,11 @@ export function ClassSelectionStage({ onNext, onBack, userData, setUserData }: C
 
         <div className="flex justify-center">
           <Button
-            onClick={onNext}
-            disabled={!selected}
+            onClick={handleComplete}
+            disabled={!selected || isLoading}
             className="bg-primary text-primary-foreground hover:bg-primary/90 neon-border border-primary h-12 px-8 text-base font-bold disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            INITIATE_CORE_UPLOAD
+            {isLoading ? "UPLOADING..." : "INITIATE_CORE_UPLOAD"}
           </Button>
         </div>
       </motion.div>

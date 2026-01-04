@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import type { ChangeEvent } from "react"
+import { createClient } from "@supabase/supabase-js"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner"
 import {
   User,
   Moon,
@@ -32,8 +33,22 @@ import {
   XCircle,
   Lock,
   Pill,
+  Loader2,
 } from "lucide-react"
+import { scanFood, logMealChoice } from "@/lib/api-client"
 import type { UserData } from "@/app/page"
+
+// Helper function to get achievement icon
+const getAchievementIcon = (key: string): string => {
+  const iconMap: Record<string, string> = {
+    "account-created": "🎉",
+    "first-scan": "🔍",
+    "level-up": "⭐",
+    "health-master": "💪",
+    "streak-7": "🔥",
+  }
+  return iconMap[key] || "🏆"
+}
 
 type DailyChallenge = {
   id: string
@@ -95,7 +110,6 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
   const [darkMode, setDarkMode] = useState(false)
   const [vitality, setVitality] = useState(100)
   const [foodInput, setFoodInput] = useState("")
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [scanResult, setScanResult] = useState("")
   const [showPillChoice, setShowPillChoice] = useState(false)
   const [pendingScan, setPendingScan] = useState<any>(null)
@@ -104,6 +118,8 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
   const [hoveredNav, setHoveredNav] = useState<string | null>(null)
   const [currentDateTime, setCurrentDateTime] = useState(new Date())
   const [calendarDate, setCalendarDate] = useState(new Date())
+  const [isScanning, setIsScanning] = useState(false)
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [mealHistory, setMealHistory] = useState<MealEntry[]>([
     {
       date: "2025-01-15",
@@ -224,6 +240,76 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
     return () => clearInterval(timer)
   }, [])
 
+  // Fetch achievements from database
+  useEffect(() => {
+    const fetchAchievements = async () => {
+      try {
+        if (!userData.id) return
+        
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
+
+        const { data: achievementsData } = await supabase
+          .from("achievements")
+          .select("*")
+          .eq("user_id", userData.id)
+
+        if (achievementsData && achievementsData.length > 0) {
+          const formattedAchievements: Achievement[] = achievementsData.map((ach) => ({
+            id: ach.id,
+            title: ach.achievement_key.toUpperCase(),
+            description: ach.description || "",
+            icon: getAchievementIcon(ach.achievement_key),
+            unlocked: true,
+            unlockedDate: ach.unlocked_at,
+          }))
+          setAchievements(formattedAchievements)
+        }
+      } catch (error) {
+        console.error("Error fetching achievements:", error)
+      }
+    }
+
+    fetchAchievements()
+  }, [userData.id])
+
+  // Fetch latest user stats on component mount
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      try {
+        if (!userData.id) return
+        
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
+
+        const { data: userStats } = await supabase
+          .from("users")
+          .select("vitality, current_xp, good_choices, bad_choices")
+          .eq("id", userData.id)
+          .single()
+
+        if (userStats) {
+          setVitality(userStats.vitality || 100)
+          setUserData((prev) => ({
+            ...prev,
+            vitality: userStats.vitality,
+            current_xp: userStats.current_xp,
+            good_choices: userStats.good_choices,
+            bad_choices: userStats.bad_choices,
+          }))
+        }
+      } catch (error) {
+        console.error("Error fetching user stats:", error)
+      }
+    }
+
+    fetchUserStats()
+  }, [userData.id])
+
   const calculateRank = (level: number): string => {
     if (level >= 50) return "MASTER"
     if (level >= 30) return "EXPERT"
@@ -236,7 +322,6 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
     setDarkMode(!darkMode)
     document.documentElement.classList.toggle("dark")
   }
-
   const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -249,54 +334,68 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
     }
     reader.readAsDataURL(file)
   }
-
   const handleScan = async () => {
-  if (!foodInput) return
-
-  console.log("[v0] Starting food scan for:", foodInput)
-
-  try {
-    // Call your API route
-    const response = await fetch('/api/analyze-food', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        foodInput,
-        imageBase64: uploadedImage,
-        userData: {
-          age: userData.age,
-          weight: userData.weight,
-          height: userData.height,
-          medicalHistory: userData.medicalHistory,
-          dailyActivity: userData.dailyActivity,
-          selectedClass: userData.selectedClass
-        }
-      })
-    })
-
-    const result = await response.json()
-
-    if (!result.success) {
-      console.error('API Error:', result.error)
+    if (!foodInput) {
+      toast.error("Please enter a food name")
       return
     }
 
-    const aiData = result.data
+    console.log("[Dashboard] Starting food scan for:", foodInput)
+    setIsScanning(true)
+    try {
+    // Call your API route
+      const response = await fetch('/api/analyze-food', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          foodInput,
+          imageBase64: uploadedImage,
+          userData: {
+            age: userData.age,
+            weight: userData.weight,
+            height: userData.height,
+            medicalHistory: userData.medicalHistory,
+            dailyActivity: userData.dailyActivity,
+            selectedClass: userData.selectedClass
+          }
+        })
+      })
 
-    // Create the scan data object
-    const scanData = {
-      food: aiData.foodName,
-      calories: aiData.calories,
-      protein: aiData.protein,
-      carbs: aiData.carbs,
-      fats: aiData.fats,
-      sugar: aiData.sugar,
-      sodium: aiData.sodium,
-      isHealthy: aiData.isHealthy,
-      healthScore: aiData.healthScore,
-      redPillConsequences: aiData.redPillWarnings.join('. '),
-      bluePillAlternative: aiData.bluePillAlternatives.join('. '),
-      detailedAnalysis: `
+      const result = await response.json()
+
+      if (!result.success) {
+        console.error('API Error:', result.error)
+        return
+      }
+
+      const aiData = result.data
+
+      // Create the scan data object
+      const scanData = {
+        food: aiData.foodName,
+        calories: aiData.calories,
+        protein: aiData.protein,
+        carbs: aiData.carbs,
+        fats: aiData.fats,
+        sugar: aiData.sugar,
+        sodium: aiData.sodium,
+        isHealthy: aiData.isHealthy,
+        healthScore: aiData.healthScore,
+        redPillConsequences: aiData.redPillWarnings.join('. '),
+        bluePillAlternative: aiData.bluePillAlternatives.join('. '),
+        // Pass through structured pill payloads so we can
+        // compute vitality/xp deltas when user chooses.
+        redPill: {
+          truth: aiData.redPill?.truth ?? aiData.redPillWarnings.join('. '),
+          vitalityDelta: aiData.redPill?.vitalityDelta ?? 0,
+          xpDelta: aiData.redPill?.xpDelta ?? 0,
+        },
+        bluePill: {
+          optimization: aiData.bluePill?.optimization ?? aiData.bluePillAlternatives.join('. '),
+          vitalityDelta: aiData.bluePill?.vitalityDelta ?? 0,
+          xpDelta: aiData.bluePill?.xpDelta ?? 0,
+        },
+        detailedAnalysis: `
 FOOD: ${aiData.foodName}
 HEALTH SCORE: ${aiData.healthScore}/100
 
@@ -317,156 +416,181 @@ ${aiData.personalizedAdvice}
     }
 
     console.log("[v0] AI Response received:", scanData)
+      setScanResult(scanData.detailedAnalysis)
+      setPendingScan(scanData)
+      setShowPillChoice(true)
+      setActiveTab("intel")
+      toast.success(`Analyzed: ${result.data.foodName}`)
 
-    // Show the results and pill choice
-    setScanResult(scanData.detailedAnalysis)
-    setPendingScan(scanData)
-    setShowPillChoice(true)
-    setActiveTab("intel")
-
-    // Achievement: First scan
-    if (!achievements[0].unlocked) {
-      const updatedAchievements = [...achievements]
-      updatedAchievements[0] = {
-        ...updatedAchievements[0],
-        unlocked: true,
-        unlockedDate: new Date().toISOString(),
-      }
-      setAchievements(updatedAchievements)
-    }
-
-    // Update challenge progress
-    const updatedChallenges = [...dailyChallenges]
-    if (!updatedChallenges[0].completed) {
-      updatedChallenges[0].progress = Math.min(
-        updatedChallenges[0].progress + 1,
-        updatedChallenges[0].goal
-      )
-      if (updatedChallenges[0].progress >= updatedChallenges[0].goal) {
-        updatedChallenges[0].completed = true
-        const newXP = userData.experience + updatedChallenges[0].xpReward
-        if (newXP >= 1000) {
-          setUserData({ 
-            ...userData, 
-            experience: newXP - 1000, 
-            level: userData.level + 1 
-          })
-        } else {
-          setUserData({ ...userData, experience: newXP })
-        }
-      }
-      setDailyChallenges(updatedChallenges)
-
-
-
-    }
-
-  } catch (error) {
-    console.error('[v0] Error scanning food:', error)
-    alert('Failed to scan food. Please try again.')
-  }
-}
-
-  const handlePillChoice = (choice: "red" | "blue") => {
-    // ========================================
-    // BACKEND INTEGRATION POINT #2: RECORD USER CHOICE
-    // ========================================
-    // Send the user's choice to your backend
-    // await fetch('/api/record-choice', {
-    //   method: 'POST',
-    //   body: JSON.stringify({
-    //     userId: userData.username,
-    //     foodScanned: pendingScan.food,
-    //     choice: choice,
-    //     timestamp: new Date().toISOString()
-    //   })
-    // })
-
-    if (choice === "red") {
-      setScreenFlash("red")
-      const newVitality = Math.max(0, vitality - 15) // Example penalty
-      setVitality(newVitality)
-
-      setWeeklyReport({ ...weeklyReport, badChoices: weeklyReport.badChoices + 1 })
-    } else {
-      setScreenFlash("green")
-      const newVitality = Math.min(100, vitality + 10) // Example bonus
-      setVitality(newVitality)
-
-      // Calculate XP and level up
-      const xpGain = 50 // Example XP for a good choice
-      const newXP = userData.experience + xpGain
-
-      if (newXP >= 1000) {
-        // Assuming 1000 XP for level up
-        const newLevel = userData.level + 1
-        let newRank = userData.rank
-        // Simplified rank calculation for example
-        if (newLevel >= 20) newRank = "MASTER"
-        else if (newLevel >= 15) newRank = "EXPERT"
-        else if (newLevel >= 10) newRank = "ADVANCED"
-        else if (newLevel >= 5) newRank = "INTERMEDIATE"
-
-        setUserData({
-          ...userData,
-          experience: newXP - 1000,
-          level: newLevel,
-          rank: newRank,
-        })
-      } else {
-        setUserData({ ...userData, experience: newXP })
-      }
-
-      setWeeklyReport({
-        ...weeklyReport,
-        goodChoices: weeklyReport.goodChoices + 1,
-        totalXP: weeklyReport.totalXP + xpGain,
-      })
-
-      const updatedChallenges = [...dailyChallenges]
-      if (!updatedChallenges[1].completed) {
-        updatedChallenges[1].progress = Math.min(updatedChallenges[1].progress + 1, updatedChallenges[1].goal)
-        if (updatedChallenges[1].progress >= updatedChallenges[1].goal) {
-          updatedChallenges[1].completed = true
-          const bonusXP = updatedChallenges[1].xpReward
-          const totalXP = userData.experience + bonusXP // Use current XP for calculation
-          if (totalXP >= 1000) {
-            setUserData({ ...userData, experience: totalXP - 1000, level: userData.level + 1 })
-          } else {
-            setUserData({ ...userData, experience: totalXP })
-          }
-        }
-        setDailyChallenges(updatedChallenges)
-      }
-
-      if (weeklyReport.goodChoices >= 10 && !achievements[1].unlocked) {
+      // Unlock first scan achievement
+      if (!achievements[0].unlocked) {
         const updatedAchievements = [...achievements]
-        updatedAchievements[1] = {
-          ...updatedAchievements[1],
+        updatedAchievements[0] = {
+          ...updatedAchievements[0],
           unlocked: true,
           unlockedDate: new Date().toISOString(),
         }
         setAchievements(updatedAchievements)
       }
+
+      // Update scan challenge
+      const updatedChallenges = [...dailyChallenges]
+      if (!updatedChallenges[0].completed) {
+        updatedChallenges[0].progress = Math.min(updatedChallenges[0].progress + 1, updatedChallenges[0].goal)
+        if (updatedChallenges[0].progress >= updatedChallenges[0].goal) {
+          updatedChallenges[0].completed = true
+          const newXP = userData.experience + updatedChallenges[0].xpReward
+          if (newXP >= 1000) {
+            setUserData({ ...userData, experience: newXP - 1000, level: userData.level + 1 })
+          } else {
+            setUserData({ ...userData, experience: newXP })
+          }
+        }
+        setDailyChallenges(updatedChallenges)
+      }
+    } catch (error) {
+      console.error("[Dashboard] Scan error:", error)
+      toast.error("Error analyzing food. Please try again.")
+    } finally {
+      setIsScanning(false)
+    }
+  }
+
+  const handlePillChoice = async (choice: "red" | "blue") => {
+    if (!pendingScan) {
+      console.error("[Dashboard] No pending scan to process")
+      return
     }
 
-    setTimeout(() => setScreenFlash(null), 500)
-    setShowPillChoice(false)
-    setPendingScan(null)
+    console.log("[Dashboard] User chose:", choice)
 
-    const newMeal: MealEntry = {
-      date: new Date().toISOString().split("T")[0],
-      food: pendingScan?.food || foodInput, // Use food from pendingScan if available, otherwise from input
-      calories: pendingScan?.calories || 0,
-      protein: pendingScan?.protein || 0,
-      carbs: pendingScan?.carbs || 0,
-      fats: pendingScan?.fats || 0,
-      xpGained: choice === "blue" ? 50 : 0, // Simple XP gain based on choice
-      choice,
-      isHealthy: choice === "blue", // Store health status based on choice
+    try {
+      let vitalityDelta = 0
+      let xpDelta = 0
+
+      // Safely derive red/blue pill payloads from pendingScan
+      const redPill = pendingScan.redPill || {
+        vitalityDelta: 0,
+        xpDelta: 0,
+        truth: pendingScan.redPillConsequences || "",
+      }
+      const bluePill = pendingScan.bluePill || {
+        vitalityDelta: 0,
+        xpDelta: 0,
+        optimization: pendingScan.bluePillAlternative || "",
+      }
+
+      if (choice === "red") {
+        vitalityDelta = redPill.vitalityDelta
+        xpDelta = redPill.xpDelta
+        setScreenFlash("red")
+      } else {
+        vitalityDelta = bluePill.vitalityDelta
+        xpDelta = bluePill.xpDelta
+        setScreenFlash("green")
+      }
+
+      console.log("[Dashboard] Logging meal choice to database...")
+
+      const logResult = await logMealChoice(
+        userData.username,
+        pendingScan.food,
+        choice,
+        vitalityDelta,
+        xpDelta,
+        redPill.truth,
+        bluePill.optimization
+      )
+
+      if (!logResult.success) {
+        console.error("[Dashboard] Failed to log meal:", logResult.error)
+        toast.warning("Meal saved locally but database sync failed. Retrying...")
+      } else {
+        console.log("[Dashboard] Meal logged successfully:", logResult.data)
+
+        if (logResult.data) {
+          setVitality(logResult.data.newVitality)
+          setUserData({
+            ...userData,
+            experience: logResult.data.newXP,
+          })
+
+          toast.success(
+            `${choice === "blue" ? "✅ Healthy choice!" : "⚠️ Indulgent choice!"} ${choice === "blue" ? "+" : "-"}${Math.abs(logResult.data.newVitality - vitality)} vitality`
+          )
+        }
+      }
+
+      setTimeout(() => setScreenFlash(null), 500)
+      setShowPillChoice(false)
+      setPendingScan(null)
+
+      const newMeal: MealEntry = {
+        date: new Date().toISOString().split("T")[0],
+        food: pendingScan.food,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fats: 0,
+        xpGained: xpDelta,
+        choice,
+        isHealthy: choice === "blue",
+      }
+
+      setMealHistory([newMeal, ...mealHistory])
+      setFoodInput("")
+
+      // Update challenges and achievements
+      const updatedChallenges = [...dailyChallenges]
+      if (!updatedChallenges[1].completed) {
+        if (choice === "blue") {
+          updatedChallenges[1].progress = Math.min(updatedChallenges[1].progress + 1, updatedChallenges[1].goal)
+          if (updatedChallenges[1].progress >= updatedChallenges[1].goal) {
+            updatedChallenges[1].completed = true
+            const bonusXP = updatedChallenges[1].xpReward
+            const totalXP = userData.experience + bonusXP
+            if (totalXP >= 1000) {
+              setUserData((prev: UserData) => ({ ...prev, experience: totalXP - 1000, level: prev.level + 1 }))
+            } else {
+              setUserData((prev: UserData) => ({ ...prev, experience: totalXP }))
+            }
+            toast.success("Challenge completed! +200 XP")
+          }
+        }
+        setDailyChallenges(updatedChallenges)
+      }
+
+      const updatedWeeklyReport = { ...weeklyReport }
+      if (choice === "blue") {
+        updatedWeeklyReport.goodChoices += 1
+        updatedWeeklyReport.totalXP += xpDelta
+      } else {
+        updatedWeeklyReport.badChoices += 1
+      }
+      setWeeklyReport(updatedWeeklyReport)
+
+      const healthGuardianIndex = achievements.findIndex(
+        (a) => a.id === "health-guardian" || a.title === "HEALTH_GUARDIAN"
+      )
+
+      if (
+        updatedWeeklyReport.goodChoices >= 10 &&
+        healthGuardianIndex !== -1 &&
+        !achievements[healthGuardianIndex].unlocked
+      ) {
+        const updatedAchievements = [...achievements]
+        updatedAchievements[healthGuardianIndex] = {
+          ...updatedAchievements[healthGuardianIndex],
+          unlocked: true,
+          unlockedDate: new Date().toISOString(),
+        }
+        setAchievements(updatedAchievements)
+        toast.success("Achievement Unlocked: Health Guardian!")
+      }
+    } catch (error) {
+      console.error("[Dashboard] Error in pill choice:", error)
+      toast.error("Failed to save meal choice. Please try again.")
     }
-    setMealHistory([newMeal, ...mealHistory])
-    setFoodInput("") // Clear input after choice
   }
 
   const generateCalendarDays = () => {
@@ -1464,7 +1588,7 @@ ${aiData.personalizedAdvice}
                         <p className="text-xs text-muted-foreground mt-1">
                           {"// SCAN_NUTRITION_LABEL_OR_INGREDIENT_LIST"}
                         </p>
-                        <p className="text-xs text-accent/70 mt-2">{"Supported: JPG, PNG, PDF"}</p>
+                        <p className="text-xs text-accent/70 mt-2">{"Supported: JPG, PNG"}</p>
                         {uploadedImage && (
                           <p className="text-xs text-emerald-400 mt-2">IMAGE_SELECTED // Ready for analysis</p>
                         )}
@@ -1473,10 +1597,19 @@ ${aiData.personalizedAdvice}
 
                       <Button
                         onClick={handleScan}
-                        disabled={!foodInput}
+                        disabled={!foodInput || isScanning}
                         className="w-full bg-accent text-accent-foreground hover:bg-accent/90 neon-border border-accent h-12 font-bold disabled:opacity-50"
                       >
-                        🧬 ANALYZE_FOOD
+                        {isScanning ? (
+                          <>
+                            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                            ANALYZING...
+                          </>
+                        ) : (
+                          <>
+                            🧬 ANALYZE_FOOD
+                          </>
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -1882,7 +2015,7 @@ ${aiData.personalizedAdvice}
                   onClick={() => handlePillChoice("blue")}
                   className="group relative glass-panel border-2 border-blue-500 hover:border-blue-400 rounded-xl p-6 transition-all"
                 >
-                  <div className="absolute inset-0 bg-blue-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                 <div className="absolute inset-0 bg-blue-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                   <div className="relative">
                     <div className="flex items-center justify-center mb-4">
                       <div className="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center border-2 border-blue-500">
