@@ -35,7 +35,7 @@ import {
   Pill,
   Loader2,
 } from "lucide-react"
-import { scanFood, logMealChoice } from "@/lib/api-client"
+import { scanFood, logMealChoice, uploadAndIdentifyFood } from "@/lib/api-client"
 import type { UserData } from "@/app/page"
 
 // Helper function to get achievement icon
@@ -123,6 +123,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
   const [isScanning, setIsScanning] = useState(false)
   const [mealHistory, setMealHistory] = useState<MealEntry[]>([])
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
 
   const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>([
     {
@@ -475,6 +476,90 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
       toast.error("Error analyzing food. Please try again.")
     } finally {
       setIsScanning(false)
+    }
+  }
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    console.log("[Dashboard] Starting image upload for:", file.name)
+    setIsUploadingImage(true)
+
+    try {
+      const result = await uploadAndIdentifyFood(file, userData)
+
+      if (!result.success || !result.data) {
+        console.error("[Dashboard] Image scan failed:", result.error)
+        toast.error(result.error || "Failed to scan food from image")
+        setIsUploadingImage(false)
+        return
+      }
+
+      console.log("[Dashboard] Image food scan successful:", result.data)
+      toast.success(`🖼️ Scanned: ${result.data.foodName}`)
+
+      // Set the identified food name to the input field
+      setFoodInput(result.data.foodName)
+
+      const scanData = {
+        food: result.data.foodName,
+        sensorReadout: result.data.sensorReadout,
+        redPill: {
+          truth: result.data.redPill.truth,
+          vitalityDelta: result.data.redPill.vitalityDelta,
+          xpDelta: result.data.redPill.xpDelta,
+        },
+        bluePill: {
+          optimization: result.data.bluePill.optimization,
+          vitalityDelta: result.data.bluePill.vitalityDelta,
+          xpDelta: result.data.bluePill.xpDelta,
+        },
+      }
+
+      setPendingScan(scanData)
+      setScanResult(JSON.stringify(scanData, null, 2))
+      setShowPillChoice(true)
+      setActiveTab("intel")
+
+      // Unlock first scan achievement
+      if (!achievements[0].unlocked) {
+        const updatedAchievements = [...achievements]
+        updatedAchievements[0] = {
+          ...updatedAchievements[0],
+          unlocked: true,
+          unlockedDate: new Date().toISOString(),
+        }
+        setAchievements(updatedAchievements)
+      }
+
+      // Update scan challenge
+      const updatedChallenges = [...dailyChallenges]
+      if (!updatedChallenges[0].completed) {
+        updatedChallenges[0].progress = Math.min(updatedChallenges[0].progress + 1, updatedChallenges[0].goal)
+        if (updatedChallenges[0].progress >= updatedChallenges[0].goal) {
+          updatedChallenges[0].completed = true
+          const newXP = userData.experience + updatedChallenges[0].xpReward
+          if (newXP >= 1000) {
+            setUserData({ ...userData, experience: newXP - 1000, level: userData.level + 1 })
+          } else {
+            setUserData({ ...userData, experience: newXP })
+          }
+        }
+        setDailyChallenges(updatedChallenges)
+      }
+    } catch (error) {
+      console.error("[Dashboard] Image upload error:", error)
+      toast.error("Error uploading image. Please try again.")
+    } finally {
+      setIsUploadingImage(false)
+    }
+
+    // Reset file input
+    if (event.target) {
+      event.target.value = ""
     }
   }
 
@@ -1023,7 +1108,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                 <motion.div
                   className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 relative"
                   initial={{ width: 0 }}
-                  animate={{ width: `${userData.experience}%` }}
+                  animate={{ width: `${(userData.experience / 1000) * 100}%` }}
                   transition={{ duration: 1, ease: "easeOut" }}
                 >
                   <motion.div
@@ -1406,7 +1491,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                       <div className="h-3 bg-muted/30 rounded-full overflow-hidden border-2 border-secondary/50">
                         <motion.div
                           className="h-full bg-gradient-to-r from-secondary to-accent"
-                          animate={{ width: `${userData.experience}%` }}
+                          animate={{ width: `${(userData.experience / 1000) * 100}%` }}
                           transition={{ duration: 0.5 }}
                         />
                       </div>
@@ -1594,22 +1679,33 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                         />
                       </div>
 
-                      <div className="border-2 border-dashed border-accent/50 rounded-lg p-8 text-center cursor-pointer hover:border-accent transition-colors hover:bg-accent/5">
+                      <div className="border-2 border-dashed border-accent/50 rounded-lg p-8 text-center cursor-pointer hover:border-accent transition-colors hover:bg-accent/5 relative group">
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          onChange={handleImageUpload}
+                          disabled={isUploadingImage || isScanning}
+                          className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                          title="Upload a food image"
+                        />
                         <div className="text-5xl mb-2">📦</div>
-                        <Upload className="w-12 h-12 text-accent mx-auto mb-3" />
+                        <Upload className={`w-12 h-12 mx-auto mb-3 transition-colors ${isUploadingImage ? "text-accent/50 animate-pulse" : "text-accent"}`} />
                         <p className="text-sm text-muted-foreground font-bold">UPLOAD_PACKAGE_IMAGE</p>
                         <p className="text-xs text-muted-foreground mt-1">
                           {"// SCAN_NUTRITION_LABEL_OR_INGREDIENT_LIST"}
                         </p>
-                        <p className="text-xs text-accent/70 mt-2">{"Supported: JPG, PNG, PDF"}</p>
+                        <p className="text-xs text-accent/70 mt-2">{"Supported: JPG, PNG, WebP, GIF"}</p>
+                        {isUploadingImage && (
+                          <p className="text-xs text-accent mt-2 font-bold animate-pulse">IDENTIFYING_FOOD...</p>
+                        )}
                       </div>
 
                       <Button
                         onClick={handleScan}
-                        disabled={!foodInput || isScanning}
+                        disabled={(!foodInput && !isUploadingImage) || (isScanning || isUploadingImage)}
                         className="w-full bg-accent text-accent-foreground hover:bg-accent/90 neon-border border-accent h-12 font-bold disabled:opacity-50"
                       >
-                        {isScanning ? (
+                        {isScanning || isUploadingImage ? (
                           <>
                             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                             ANALYZING...

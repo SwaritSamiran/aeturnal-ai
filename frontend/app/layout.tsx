@@ -5,7 +5,7 @@ import { Toaster } from "sonner"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Aeturnus-AI | Biology RPG",
+  title: "Aeturnal-AI | Biology RPG",
   description: "Level up your biology. Scan to evolve.",
   generator: "v0.app",
 }

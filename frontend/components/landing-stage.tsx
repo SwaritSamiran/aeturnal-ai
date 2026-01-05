@@ -131,7 +131,7 @@ export function LandingStage({ onInitialize, onReconnect }: LandingStageProps) {
           }}
           transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
         >
-          AETURNUS-AI
+          Aeturnal-AI
         </motion.h1>
         <motion.p
           className="text-lg md:text-xl text-accent font-mono"
