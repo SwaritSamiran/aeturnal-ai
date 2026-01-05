@@ -88,6 +88,7 @@ interface DashboardStageProps {
 
 interface MealEntry {
   date: string
+  time: string
   food: string
   calories: number
   protein: number
@@ -119,38 +120,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
   const [currentDateTime, setCurrentDateTime] = useState(new Date())
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [isScanning, setIsScanning] = useState(false)
-  const [mealHistory, setMealHistory] = useState<MealEntry[]>([
-    {
-      date: "2025-01-15",
-      food: "GRILLED_CHICKEN_SALAD",
-      calories: 450,
-      protein: 35,
-      carbs: 20,
-      fats: 15,
-      xpGained: 20,
-      choice: "blue",
-    },
-    {
-      date: "2025-01-15",
-      food: "PROTEIN_SHAKE",
-      calories: 200,
-      protein: 25,
-      carbs: 10,
-      fats: 5,
-      xpGained: 15,
-      choice: "blue",
-    },
-    {
-      date: "2025-01-14",
-      food: "OATMEAL_BOWL",
-      calories: 350,
-      protein: 12,
-      carbs: 55,
-      fats: 8,
-      xpGained: 18,
-      choice: "blue",
-    },
-  ])
+  const [mealHistory, setMealHistory] = useState<MealEntry[]>([])
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
   const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>([
@@ -222,14 +192,14 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
   ])
 
   const [weeklyReport, setWeeklyReport] = useState<WeeklyReport>({
-    weekStart: "2025-01-20",
-    weekEnd: "2025-01-26",
-    scansCompleted: 18,
-    goodChoices: 14,
-    badChoices: 4,
-    totalXP: 2100,
-    avgVitality: 87,
-    healthScore: 78,
+    weekStart: new Date(new Date().setDate(new Date().getDate() - new Date().getDay())).toISOString().split('T')[0],
+    weekEnd: new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + 6)).toISOString().split('T')[0],
+    scansCompleted: 0,
+    goodChoices: 0,
+    badChoices: 0,
+    totalXP: 0,
+    avgVitality: 0,
+    healthScore: 0,
   })
 
   useEffect(() => {
@@ -238,6 +208,116 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
     }, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Fetch weekly report from database
+  useEffect(() => {
+    const fetchWeeklyReport = async () => {
+      try {
+        if (!userData.id) return
+        
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
+
+        // Get the current week's start and end dates
+        const today = new Date()
+        const weekStart = new Date(today)
+        weekStart.setDate(today.getDate() - today.getDay())
+        weekStart.setHours(0, 0, 0, 0)
+        
+        const weekEnd = new Date(weekStart)
+        weekEnd.setDate(weekStart.getDate() + 6)
+        weekEnd.setHours(23, 59, 59, 999)
+
+        // Fetch meal logs for the week
+        const { data: mealLogsData } = await supabase
+          .from("meal_logs")
+          .select("*")
+          .eq("user_id", userData.id)
+          .gte("created_at", weekStart.toISOString())
+          .lte("created_at", weekEnd.toISOString())
+
+        if (mealLogsData) {
+          const scansCompleted = mealLogsData.length
+          const goodChoices = mealLogsData.filter(log => log.choice === 'blue').length
+          const badChoices = mealLogsData.filter(log => log.choice === 'red').length
+          const totalXP = mealLogsData.reduce((sum, log) => sum + (log.xp_delta || 0), 0)
+
+          // Calculate health score based on ratio of good choices
+          let healthScore = 50 // Base score
+          if (scansCompleted > 0) {
+            const goodChoiceRatio = goodChoices / scansCompleted
+            healthScore = Math.round(50 + (goodChoiceRatio * 50)) // 50-100 scale
+          }
+
+          setWeeklyReport({
+            weekStart: weekStart.toISOString().split('T')[0],
+            weekEnd: weekEnd.toISOString().split('T')[0],
+            scansCompleted,
+            goodChoices,
+            badChoices,
+            totalXP,
+            avgVitality: vitality, // Use current vitality as average
+            healthScore,
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching weekly report:", error)
+      }
+    }
+
+    fetchWeeklyReport()
+  }, [userData.id, vitality])
+
+  // Fetch meal logs from database for calendar
+  useEffect(() => {
+    const fetchMealLogs = async () => {
+      try {
+        if (!userData.id) return
+        
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
+
+        // Fetch all meal logs for the user
+        const { data: mealLogsData } = await supabase
+          .from("meal_logs")
+          .select("*")
+          .eq("user_id", userData.id)
+          .order("created_at", { ascending: false })
+
+        if (mealLogsData && mealLogsData.length > 0) {
+          // Convert meal logs from database format to MealEntry format
+          const formattedMealEntries: MealEntry[] = mealLogsData.map((log) => {
+            // Extract local date and time from the created_at timestamp
+            const logDate = new Date(log.created_at)
+            const dateString = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, '0')}-${String(logDate.getDate()).padStart(2, '0')}`
+            const timeString = `${String(logDate.getHours()).padStart(2, '0')}:${String(logDate.getMinutes()).padStart(2, '0')}`
+            
+            return {
+              date: dateString,
+              time: timeString,
+              food: log.food_name,
+              calories: log.calories || 0,
+              protein: log.protein || 0,
+              carbs: log.carbs || 0,
+              fats: log.fats || 0,
+              xpGained: log.xp_delta || 0,
+              choice: log.choice as "red" | "blue",
+              isHealthy: log.choice === "blue",
+            }
+          })
+          setMealHistory(formattedMealEntries)
+        }
+      } catch (error) {
+        console.error("Error fetching meal logs:", error)
+      }
+    }
+
+    fetchMealLogs()
+  }, [userData.id])
 
   // Fetch achievements from database
   useEffect(() => {
@@ -293,13 +373,13 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
 
         if (userStats) {
           setVitality(userStats.vitality || 100)
-          setUserData((prev) => ({
-            ...prev,
+          setUserData({
+            ...userData,
             vitality: userStats.vitality,
             current_xp: userStats.current_xp,
             good_choices: userStats.good_choices,
             bad_choices: userStats.bad_choices,
-          }))
+          } as UserData)
         }
       } catch (error) {
         console.error("Error fetching user stats:", error)
@@ -454,8 +534,14 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
       setShowPillChoice(false)
       setPendingScan(null)
 
+      // Create local date and time strings to avoid timezone offset issues
+      const now = new Date()
+      const dateString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const timeString = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      
       const newMeal: MealEntry = {
-        date: new Date().toISOString().split("T")[0],
+        date: dateString,
+        time: timeString,
         food: pendingScan.food,
         calories: 0,
         protein: 0,
@@ -479,9 +565,9 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
             const bonusXP = updatedChallenges[1].xpReward
             const totalXP = userData.experience + bonusXP
             if (totalXP >= 1000) {
-              setUserData((prev: UserData) => ({ ...prev, experience: totalXP - 1000, level: prev.level + 1 }))
+              setUserData({ ...userData, experience: totalXP - 1000, level: userData.level + 1 })
             } else {
-              setUserData((prev: UserData) => ({ ...prev, experience: totalXP }))
+              setUserData({ ...userData, experience: totalXP })
             }
             toast.success("Challenge completed! +200 XP")
           }
@@ -496,6 +582,14 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
       } else {
         updatedWeeklyReport.badChoices += 1
       }
+      
+      // Update health score based on current good/bad choices ratio
+      const totalChoices = updatedWeeklyReport.goodChoices + updatedWeeklyReport.badChoices
+      if (totalChoices > 0) {
+        const goodChoiceRatio = updatedWeeklyReport.goodChoices / totalChoices
+        updatedWeeklyReport.healthScore = Math.round(50 + (goodChoiceRatio * 50))
+      }
+      
       setWeeklyReport(updatedWeeklyReport)
 
       if (updatedWeeklyReport.goodChoices >= 10 && !achievements[1].unlocked) {
@@ -529,7 +623,8 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
 
     for (let i = 1; i <= lastDay.getDate(); i++) {
       const date = new Date(year, month, i)
-      const dateString = date.toISOString().split("T")[0]
+      // Use local date instead of UTC to avoid timezone offset issues
+      const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
       const hasMeals = mealHistory.some((meal) => meal.date === dateString)
       days.push({ day: i, date: dateString, hasMeals })
     }
@@ -1211,7 +1306,10 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                         {getMealsForDate(selectedDate).map((meal, index) => (
                           <div key={index} className="glass-panel border-primary/30 rounded-lg p-6">
                             <div className="flex items-start justify-between mb-3">
-                              <h4 className="text-lg font-bold text-primary">{meal.food}</h4>
+                              <div>
+                                <h4 className="text-lg font-bold text-primary">{meal.food}</h4>
+                                <p className="text-xs text-muted-foreground mt-1">{meal.time}</p>
+                              </div>
                               {meal.choice && (
                                 <span
                                   className={`px-3 py-1 rounded-full text-xs font-bold ${
