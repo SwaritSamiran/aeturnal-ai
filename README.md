@@ -12,7 +12,7 @@
 
 ## 🎮 What is Aeturnal-AI?
 
-Aeturnal-AI transforms healthy eating into an RPG adventure! Scan your food—via **text input or image upload**—and get AI-powered health insights through a unique **Red Pill / Blue Pill** choice system:
+Aeturnal-AI transforms healthy eating into an RPG adventure inspired by "The Matrix"! Scan your food—via **text input or image upload**—and get AI-powered health insights through a unique **Red Pill / Blue Pill** choice system:
 
 - 🔴 **Red Pill** - The honest truth about your food choice
 - 🔵 **Blue Pill** - Healthier alternatives & optimizations
@@ -21,17 +21,25 @@ Earn XP, level up your character, and track your vitality as you make better foo
 
 ---
 
-## ✨ Features
+## ✨ FEATURES
 
-- 🤖 **AI Food Analysis** 
-  - 📝 **Text Input**: Powered by Google Gemma 3 27B
-  - 🖼️ **Image Upload**: Powered by Google Gemini 2.5 Flash (vision capability)
-- 🎯 **Personalized Insights** - Based on your health profile & medical history
-- 🏆 **Gamification** - XP, levels, ranks & character classes (Glucose Guardian, Metabolic Warrior, etc.)
-- 📊 **Progress Tracking** - Vitality scores, meal history & weekly reports
-- 📸 **Smart Image Recognition** - Upload nutrition labels or food photos for instant analysis
-- 🔐 **Secure Auth** - Supabase authentication with email/password
-- 📱 **Responsive UI** - Works on desktop and mobile devices
+- 🧠 **Intent Inference Engine**
+  The core intelligence of the Aeturnal OS. Our **Gemma 3** pipeline doesn't just parse food names; it performs **Deep Intent Analysis**. It infers the biological "cost" of your consumption by cross-referencing your medical history, current BMI, and specific user class.
+
+- 🎯 **Contextual Personalization (The Logic)**
+  Every insight is tailored to your unique biometric code. 
+  * **Example**: An apple is a "Vitality Boost" (+15 XP) for a **Metabolic Warrior** (Weight Loss), but triggers a "Glucose Warning" (-10 Vitality) for a **Glucose Guardian** (Diabetic). The system adapts to *who* you are, not just *what* you eat.
+
+- 🤖 **Multimodal AI Analysis** - 📝 **Text Intel**: High-reasoning nutritional audits powered by **Google Gemma 3 27B**.
+  - 🖼️ **Visual Scan**: Instant recognition of nutrition labels and food photos via **Google Gemini 2.5 Flash**.
+
+- 🏆 **RPG Gamification** High-stakes health tracking with XP, levels, and specialized character classes like **Glucose Guardian**, **Metabolic Warrior**, and **Hypertrophy Titan**.
+
+- 📊 **Dynamic Progress Tracking** Real-time HUD updates for **Vitality scores**, detailed meal history logs, and automated weekly system reports.
+
+- 🔐 **Secure Mainframe Auth** Identity management handled via **Supabase Authentication** with full email/password encryption.
+
+- 📱 **Responsive Interface** A sleek, cyberpunk-inspired UI built with **Next.js 15** and **Framer Motion**, optimized for both desktop and mobile terminals.
 
 ---
 
