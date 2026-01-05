@@ -35,7 +35,7 @@ Earn XP, level up your character, and track your vitality as you make better foo
 
 ---
 
-## 🚀 Quick Start
+## 🚀 How to host locally
 
 ### Prerequisites
 
