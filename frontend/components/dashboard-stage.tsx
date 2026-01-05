@@ -1881,12 +1881,14 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">
-                <motion.button
-                  whileHover={{ scale: 1.05, y: -5 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handlePillChoice("red")}
-                  className="group relative glass-panel border-2 border-red-500 hover:border-red-400 rounded-xl p-6 transition-all"
-                >
+                <div>
+                  <h4 className="text-center text-red-500 font-bold mb-2 text-lg">Red Pill</h4>
+                  <motion.button
+                    whileHover={{ scale: 1.05, y: -5 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handlePillChoice("red")}
+                    className="group relative glass-panel border-2 border-red-500 hover:border-red-400 rounded-xl p-6 transition-all"
+                  >
                   <div className="absolute inset-0 bg-red-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                   <div className="relative">
                     <div className="flex items-center justify-center mb-4">
@@ -1894,31 +1896,33 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                         <Pill className="w-8 h-8 text-red-500" />
                       </div>
                     </div>
-                    <h3 className="text-xl font-bold text-red-500 mb-2">RED_PILL</h3>
-                    <p className="text-sm text-muted-foreground mb-4">IGNORE_WARNINGS // Proceed with consumption</p>
+                    <h3 className="text-xl font-bold text-red-500 mb-2">{pendingScan.redPill.title}</h3>
+                    <p className="text-sm text-muted-foreground mb-4">{pendingScan.redPill.description}</p>
                     <div className="space-y-2 text-xs">
                       <div className="flex items-center gap-2 text-red-400">
                         <span>•</span>
-                        <span>VITALITY: -5 to -15</span>
+                        <span>VITALITY: {pendingScan.redPill.vitalityDelta > 0 ? '+' : ''}{pendingScan.redPill.vitalityDelta}</span>
                       </div>
                       <div className="flex items-center gap-2 text-red-400">
                         <span>•</span>
-                        <span>EXPERIENCE: 0 XP</span>
+                        <span>EXPERIENCE: +{pendingScan.redPill.xpDelta} XP</span>
                       </div>
-                      <div className="flex items-center gap-2 text-red-400">
-                        <span>•</span>
-                        <span>RISK: HIGH</span>
+                      <div className="text-xs text-muted-foreground mt-3 px-2">
+                        {pendingScan.redPill.truth}
                       </div>
                     </div>
                   </div>
                 </motion.button>
+                </div>
 
-                <motion.button
-                  whileHover={{ scale: 1.05, y: -5 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handlePillChoice("blue")}
-                  className="group relative glass-panel border-2 border-blue-500 hover:border-blue-400 rounded-xl p-6 transition-all"
-                >
+                <div>
+                  <h4 className="text-center text-blue-500 font-bold mb-2 text-lg">Blue Pill</h4>
+                  <motion.button
+                    whileHover={{ scale: 1.05, y: -5 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handlePillChoice("blue")}
+                    className="group relative glass-panel border-2 border-blue-500 hover:border-blue-400 rounded-xl p-6 transition-all"
+                  >
                   <div className="absolute inset-0 bg-blue-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                   <div className="relative">
                     <div className="flex items-center justify-center mb-4">
@@ -1926,24 +1930,24 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                         <Pill className="w-8 h-8 text-blue-500" />
                       </div>
                     </div>
-                    <h3 className="text-xl font-bold text-blue-500 mb-2">BLUE_PILL</h3>
-                    <p className="text-sm text-muted-foreground mb-4">FOLLOW_PROTOCOLS // Optimal health path</p>
+                    <h3 className="text-xl font-bold text-blue-500 mb-2">{pendingScan.bluePill.title}</h3>
+                    <p className="text-sm text-muted-foreground mb-4">{pendingScan.bluePill.description}</p>
                     <div className="space-y-2 text-xs">
                       <div className="flex items-center gap-2 text-blue-400">
                         <span>•</span>
-                        <span>VITALITY: +3 to +8</span>
+                        <span>VITALITY: +{pendingScan.bluePill.vitalityDelta}</span>
                       </div>
                       <div className="flex items-center gap-2 text-blue-400">
                         <span>•</span>
-                        <span>EXPERIENCE: +10 to +30 XP</span>
+                        <span>EXPERIENCE: +{pendingScan.bluePill.xpDelta} XP</span>
                       </div>
-                      <div className="flex items-center gap-2 text-blue-400">
-                        <span>•</span>
-                        <span>RISK: MINIMAL</span>
+                      <div className="text-xs text-muted-foreground mt-3 px-2">
+                        {pendingScan.bluePill.optimization}
                       </div>
                     </div>
                   </div>
                 </motion.button>
+                </div>
               </div>
 
               <motion.div

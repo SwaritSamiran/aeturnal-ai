@@ -23,11 +23,15 @@ interface ScanRequest {
 interface BackendScanResponse {
   sensor_readout: string
   red_pill: {
+    title: string
+    description: string
     truth: string
     vitality_delta: number
     xp_delta: number
   }
   blue_pill: {
+    title: string
+    description: string
     optimization: string
     vitality_delta: number
     xp_delta: number
@@ -40,11 +44,15 @@ interface FrontendScanResponse {
     foodName: string
     sensorReadout: string
     redPill: {
+      title: string
+      description: string
       truth: string
       vitalityDelta: number
       xpDelta: number
     }
     bluePill: {
+      title: string
+      description: string
       optimization: string
       vitalityDelta: number
       xpDelta: number
@@ -121,11 +129,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<FrontendS
         foodName: foodInput,
         sensorReadout: backendData.sensor_readout,
         redPill: {
+          title: backendData.red_pill.title,
+          description: backendData.red_pill.description,
           truth: backendData.red_pill.truth,
           vitalityDelta: backendData.red_pill.vitality_delta,
           xpDelta: backendData.red_pill.xp_delta,
         },
         bluePill: {
+          title: backendData.blue_pill.title,
+          description: backendData.blue_pill.description,
           optimization: backendData.blue_pill.optimization,
           vitalityDelta: backendData.blue_pill.vitality_delta,
           xpDelta: backendData.blue_pill.xp_delta,

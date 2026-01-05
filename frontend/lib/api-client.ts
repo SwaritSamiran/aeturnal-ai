@@ -11,11 +11,15 @@ import type { UserData } from "@/app/page"
 export interface BackendScanResponse {
   sensor_readout: string
   red_pill: {
+    title: string
+    description: string
     truth: string
     vitality_delta: number
     xp_delta: number
   }
   blue_pill: {
+    title: string
+    description: string
     optimization: string
     vitality_delta: number
     xp_delta: number
@@ -28,11 +32,15 @@ export interface ScanResult {
     foodName: string
     sensorReadout: string
     redPill: {
+      title: string
+      description: string
       truth: string
       vitalityDelta: number
       xpDelta: number
     }
     bluePill: {
+      title: string
+      description: string
       optimization: string
       vitalityDelta: number
       xpDelta: number

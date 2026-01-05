@@ -109,34 +109,59 @@ async def scan_food(request: ScanRequest):
 
         logger.info(f"🔍 Analyzing food: {request.food_item} for {request.user_context.username}")
 
-        # Simplified prompt for Gemma compatibility
-        prompt = f"""Analyze this food item for health impact. Respond ONLY with valid JSON, no other text.
+        model = genai.GenerativeModel(MODEL_ID)
+
+        # Enhanced prompt with personalized health analysis
+        prompt = f"""Analyze this food item considering the user's specific health profile. Respond ONLY with valid JSON, no other text.
 
 Food: {request.food_item}
-User: {request.user_context.username}, Age {request.user_context.age}, Weight {request.user_context.weight}kg
+User Profile:
+- Name: {request.user_context.username}
+- Age: {request.user_context.age}
+- Weight: {request.user_context.weight}kg
+- Height: {request.user_context.height}cm
+- Medical History: {request.user_context.medicalHistory or 'None specified'}
+- Daily Activity: {request.user_context.dailyActivity or 'moderate'}
+- Health Class: {request.user_context.selectedClass or 'general'}
+
+IMPORTANT: Consider the user's medical conditions, age, weight goals, and activity level when assessing health impact.
 
 Return JSON with this EXACT structure:
 {{
-  "sensor_readout": "Brief 1-sentence analysis",
+  "sensor_readout": "Personalized 1-sentence analysis based on user's health profile",
   "red_pill": {{
-    "truth": "Health risks (max 100 chars)",
-    "vitality_delta": -10,
+    "title": "Brief title for this choice (max 30 chars)",
+    "description": "Context-aware explanation considering user's situation (max 80 chars)",
+    "truth": "Honest assessment considering user's specific health conditions (max 100 chars)",
+    "vitality_delta": 0,
     "xp_delta": 10
   }},
   "blue_pill": {{
-    "optimization": "Healthier alternative (max 100 chars)",
+    "title": "Brief title for healthier choice (max 30 chars)",
+    "description": "Helpful alternative considering user's needs (max 80 chars)",
+    "optimization": "Personalized healthier alternative based on user's profile (max 100 chars)",
     "vitality_delta": 10,
     "xp_delta": 50
   }}
-}}"""
+}}
 
-        logger.info(f"📡 Calling Gemini API with model: {MODEL_ID}")
+Personalization Rules for vitality_delta:
+- Red pill: Based on food's impact for THIS specific user (-20 to +20 range)
+  * If user has diabetes: High-sugar/carb foods = more negative
+  * If user has hypertension: High-sodium foods = more negative  
+  * If user wants weight loss: High-calorie foods = more negative
+  * If user has allergies: Problematic foods = very negative
+  * Healthy foods for user's conditions = positive
+- Blue pill: Always suggests improvements tailored to user's health needs (+10 to +20)
 
-        # Call Gemini API
-        model = genai.GenerativeModel(MODEL_ID)
+For titles and descriptions:
+- Consider TIME of day, user's stated needs, and real-life situations
+- Be empathetic and understanding (e.g., "If you really need to stay awake...")
+- Red pill titles: Acknowledge the user's potential reasons for choosing this
+- Blue pill titles: Suggest practical, helpful alternatives
+- Keep descriptions conversational and context-aware (max 80 chars each)"""
+
         response = model.generate_content(prompt)
-
-        # Parse and validate response
         response_text = response.text
         logger.info(f"🔍 Raw response from Gemma: {response_text[:200]}...")
         
@@ -160,13 +185,14 @@ Return JSON with this EXACT structure:
 
     except json.JSONDecodeError as e:
         logger.error(f"❌ Invalid JSON from AI model: {str(e)}")
-        logger.error(f"📋 Full response text: {response_text}")
+        logger.error(f"📋 Full response text: {response_text if 'response_text' in locals() else 'No response text available'}")
         raise HTTPException(
             status_code=500,
-            detail=f"AI response was not valid JSON. Full response: {response_text[:500]}"
+            detail=f"AI response was not valid JSON. Full response: {response_text[:500] if 'response_text' in locals() else 'Response parsing failed'}"
         )
     except Exception as e:
         logger.error(f"❌ Error during food scan: {str(e)}")
+        logger.error(f"📋 Response text at error: {response_text if 'response_text' in locals() else 'No response text available'}")
         raise HTTPException(
             status_code=500,
             detail=f"Analysis failed: {str(e)}"
