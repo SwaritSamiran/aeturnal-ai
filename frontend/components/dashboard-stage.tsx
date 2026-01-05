@@ -114,6 +114,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
   const [scanResult, setScanResult] = useState("")
   const [showPillChoice, setShowPillChoice] = useState(false)
   const [pendingScan, setPendingScan] = useState<any>(null)
+  const [selectedPill, setSelectedPill] = useState<"red" | "blue" | null>(null)
   const [screenFlash, setScreenFlash] = useState<"red" | "green" | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [hoveredNav, setHoveredNav] = useState<string | null>(null)
@@ -483,6 +484,7 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
       return
     }
 
+    setSelectedPill(choice)
     console.log("[Dashboard] User chose:", choice)
 
     try {
@@ -1656,11 +1658,106 @@ export function DashboardStage({ userData, setUserData, onLogout }: DashboardSta
                     <h3 className="text-lg font-bold text-secondary mb-4">ANALYSIS_OUTPUT</h3>
 
                     {scanResult ? (
-                      <Textarea
-                        value={scanResult}
-                        readOnly
-                        className="bg-input border-secondary text-foreground neon-border min-h-80 font-mono text-sm resize-none"
-                      />
+                      <div className="space-y-6">
+                        {(() => {
+                          try {
+                            const data = JSON.parse(scanResult)
+                            return (
+                              <>
+                                {/* Selection Indicator */}
+                                {selectedPill && (
+                                  <div className={`rounded-lg p-4 border-2 font-bold text-center ${
+                                    selectedPill === "red"
+                                      ? "bg-red-500/20 border-red-500 text-red-500"
+                                      : "bg-blue-500/20 border-blue-500 text-blue-500"
+                                  }`}>
+                                    <span className="text-lg">
+                                      {selectedPill === "red" ? "🔴" : "🔵"} YOU_SELECTED: {selectedPill.toUpperCase()}_PILL
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Food Info */}
+                                <div className="bg-primary/10 border-2 border-primary/30 rounded-lg p-4">
+                                  <h4 className="text-primary font-bold text-lg mb-2">🔍 FOOD_ANALYSIS</h4>
+                                  <p className="text-foreground text-sm font-bold">{data.food}</p>
+                                  <p className="text-muted-foreground text-xs mt-2">{data.sensorReadout}</p>
+                                </div>
+
+                                {/* Red Pill Section */}
+                                <div className={`rounded-lg p-4 border-2 ${
+                                  selectedPill === "red"
+                                    ? "bg-red-500/20 border-red-500 ring-2 ring-red-500"
+                                    : "bg-red-500/10 border-red-500/30"
+                                }`}>
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <Pill className="w-5 h-5 text-red-500" />
+                                    <h4 className="text-red-500 font-bold text-lg">RED_PILL_TRUTH</h4>
+                                    {selectedPill === "red" && <span className="text-xs bg-red-500 text-white px-2 py-1 rounded">SELECTED</span>}
+                                  </div>
+                                  <p className="text-foreground text-sm mb-4">{data.redPill.truth}</p>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-background/50 rounded p-3">
+                                      <p className="text-xs text-muted-foreground uppercase font-bold">Vitality Impact</p>
+                                      <p className="text-lg font-bold mt-1 text-red-500">{data.redPill.vitalityDelta}</p>
+                                    </div>
+                                    <div className="bg-background/50 rounded p-3">
+                                      <p className="text-xs text-muted-foreground uppercase font-bold">XP Gain</p>
+                                      <p className="text-lg font-bold mt-1 text-yellow-500">+{data.redPill.xpDelta} XP</p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Blue Pill Section */}
+                                <div className={`rounded-lg p-4 border-2 ${
+                                  selectedPill === "blue"
+                                    ? "bg-blue-500/20 border-blue-500 ring-2 ring-blue-500"
+                                    : "bg-blue-500/10 border-blue-500/30"
+                                }`}>
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <Pill className="w-5 h-5 text-blue-500" />
+                                    <h4 className="text-blue-500 font-bold text-lg">BLUE_PILL_OPTIMIZATION</h4>
+                                    {selectedPill === "blue" && <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded">SELECTED</span>}
+                                  </div>
+                                  <p className="text-foreground text-sm mb-4">{data.bluePill.optimization}</p>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-background/50 rounded p-3">
+                                      <p className="text-xs text-muted-foreground uppercase font-bold">Vitality Impact</p>
+                                      <p className={`text-lg font-bold mt-1 ${data.bluePill.vitalityDelta > 0 ? "text-emerald-500" : "text-red-500"}`}>
+                                        {data.bluePill.vitalityDelta > 0 ? "+" : ""}{data.bluePill.vitalityDelta}
+                                      </p>
+                                    </div>
+                                    <div className="bg-background/50 rounded p-3">
+                                      <p className="text-xs text-muted-foreground uppercase font-bold">XP Gain</p>
+                                      <p className="text-lg font-bold mt-1 text-yellow-500">+{data.bluePill.xpDelta} XP</p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Raw JSON Toggle */}
+                                <details className="text-xs">
+                                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground font-bold">
+                                    📋 VIEW_RAW_DATA
+                                  </summary>
+                                  <Textarea
+                                    value={scanResult}
+                                    readOnly
+                                    className="bg-input border-secondary text-foreground neon-border min-h-40 font-mono text-xs resize-none mt-2"
+                                  />
+                                </details>
+                              </>
+                            )
+                          } catch (e) {
+                            return (
+                              <Textarea
+                                value={scanResult}
+                                readOnly
+                                className="bg-input border-secondary text-foreground neon-border min-h-80 font-mono text-sm resize-none"
+                              />
+                            )
+                          }
+                        })()}
+                      </div>
                     ) : (
                       <div className="min-h-80 flex items-center justify-center text-muted-foreground">
                         <div className="text-center">
