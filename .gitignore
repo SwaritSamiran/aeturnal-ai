@@ -209,3 +209,8 @@ __marimo__/
 
 
 frontend/.env.local
+
+/supabase/
+.supabaserc
+supabase/.branches/
+supabase/.temp/
