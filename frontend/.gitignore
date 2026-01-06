@@ -24,3 +24,9 @@ yarn-error.log*
 next-env.d.ts
 
 frontend/.env.local
+
+/supabase/
+.supabaserc
+supabase/.branches/
+supabase/.temp/
+
