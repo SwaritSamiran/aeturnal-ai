@@ -43,7 +43,8 @@ Earn XP, level up your character, and track your vitality as you make better foo
 
 ---
 
-## 🚀 How to host locally
+## 🚀 How to host locally 
+(If you are trying out our app on Vercel, it might take some time for the output to show up because of the spin-down on the backend host!)
 
 ### Prerequisites
 
